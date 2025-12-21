@@ -130,6 +130,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Initialize session state
+# Initialize session state - Add this RIGHT AFTER your page config
+# This prevents continuous re-processing
+
+# Core data states
 if 'df' not in st.session_state:
     st.session_state.df = None
 if 'data_structure' not in st.session_state:
@@ -138,6 +142,18 @@ if 'df_organized' not in st.session_state:
     st.session_state.df_organized = None
 if 'show_pricing' not in st.session_state:
     st.session_state.show_pricing = False
+
+# Processing flags to prevent re-running
+if 'file_processed' not in st.session_state:
+    st.session_state.file_processed = False
+if 'data_cleaned' not in st.session_state:
+    st.session_state.data_cleaned = False
+if 'structure_detected' not in st.session_state:
+    st.session_state.structure_detected = False
+
+# File upload tracking
+if 'last_uploaded_file' not in st.session_state:
+    st.session_state.last_uploaded_file = None
 
 # Check if user is logged in
 if not is_logged_in():
@@ -409,45 +425,77 @@ with tab1:
         )
         
         if uploaded_file:
-            file_ext = uploaded_file.name.split('.')[-1].lower()
+            # Create unique file identifier
+            file_id = f"{uploaded_file.name}_{uploaded_file.size}"
             
-            st.info(f"📁 Uploaded: {uploaded_file.name} ({file_ext.upper()}, {uploaded_file.size / 1024:.1f} KB)")
+            # Check if this is a new file or already processed
+            if st.session_state.last_uploaded_file != file_id:
+                # New file - process it
+                file_ext = uploaded_file.name.split('.')[-1].lower()
+                
+                st.info(f"Uploaded: {uploaded_file.name} ({file_ext.upper()}, {uploaded_file.size / 1024:.1f} KB)")
+                
+                with st.spinner(f"Reading {file_ext.upper()} file..."):
+                    try:
+                        # Import the file parser
+                        from utils.file_parser import parse_uploaded_file
+                        
+                        df_raw = parse_uploaded_file(uploaded_file)
+                        
+                        if df_raw is not None and len(df_raw) > 0:
+                            st.session_state.df = df_raw
+                            st.session_state.last_uploaded_file = file_id
+                            st.session_state.file_processed = True
+                            
+                            # Increment conversion count
+                            increment_conversion_count(st.session_state.user_email)
+                            
+                            # Show preview
+                            with st.expander("Data Preview", expanded=True):
+                                st.dataframe(df_raw.head(10), use_container_width=True)
+                                st.caption(f"**Total:** {len(df_raw):,} rows × {len(df_raw.columns)} columns")
+                            
+                            st.success(f"{file_ext.upper()} file processed successfully!")
+                            
+                            # Auto-advance hint
+                            st.info("Click on the **Detect** tab to continue")
+                            
+                        else:
+                            st.error(f"Could not extract data from {file_ext.upper()} file")
+                            st.info("""
+                            **Troubleshooting tips:**
+                            - For PDFs: Ensure the document contains actual tables (not scanned images)
+                            - For Word docs: Data should be in table format
+                            - For Excel: Check if file is password-protected
+                            """)
+                            
+                    except Exception as e:
+                        st.error(f"Error reading file: {str(e)}")
+                        
+                        # Show detailed error for debugging
+                        with st.expander("Technical Details"):
+                            st.code(str(e))
+                            st.caption("If this error persists, try saving your data in CSV format.")
             
-            with st.spinner(f"Reading {file_ext.upper()} file..."):
-                try:
-                    # Import the new file parser
-                    from utils.file_parser import parse_uploaded_file
+            else:
+                # File already processed - just show preview
+                if st.session_state.df is not None:
+                    st.success(f"File already loaded: {uploaded_file.name}")
                     
-                    df_raw = parse_uploaded_file(uploaded_file)
+                    with st.expander("Current Data Preview", expanded=False):
+                        st.dataframe(st.session_state.df.head(10), use_container_width=True)
+                        st.caption(f"**Total:** {len(st.session_state.df):,} rows × {len(st.session_state.df.columns)} columns")
                     
-                    if df_raw is not None and len(df_raw) > 0:
-                        st.session_state.df = df_raw
-                        # Increment conversion count
-                        increment_conversion_count(st.session_state.user_email)
-                        
-                        # Show preview
-                        with st.expander("Data Preview", expanded=True):
-                            st.dataframe(df_raw.head(10), use_container_width=True)
-                            st.caption(f"**Total:** {len(df_raw):,} rows × {len(df_raw.columns)} columns")
-                        
-                        st.success(f"✅ {file_ext.upper()} file processed successfully!")
+                    st.info("Click on the **Detect** tab to continue, or upload a different file to start over")
+                    
+                    # Option to reset
+                    if st.button("Upload Different File", type="secondary"):
+                        st.session_state.df = None
+                        st.session_state.last_uploaded_file = None
+                        st.session_state.file_processed = False
+                        st.session_state.data_cleaned = False
+                        st.session_state.structure_detected = False
                         st.rerun()
-                    else:
-                        st.error(f"Could not extract data from {file_ext.upper()} file")
-                        st.info("""
-                        **Troubleshooting tips:**
-                        - For PDFs: Ensure the document contains actual tables (not scanned images)
-                        - For Word docs: Data should be in table format
-                        - For Excel: Check if file is password-protected
-                        """)
-                        
-                except Exception as e:
-                    st.error(f"Error reading file: {str(e)}")
-                    
-                    # Show detailed error for debugging
-                    with st.expander("🔍 Technical Details"):
-                        st.code(str(e))
-                        st.caption("If this error persists, try saving your data in CSV format.")
     
     # Show examples
     with st.expander("View Examples & Tips"):
@@ -474,45 +522,74 @@ with tab2:
     if st.session_state.df is not None:
         st.markdown('<h2 class="subheader">Step 2: Data Structure Detection</h2>', unsafe_allow_html=True)
         
-        # Clean the data with error handling
-        try:
-            with st.spinner("Cleaning data..."):
-                df_clean = clean_dataframe(st.session_state.df)
-            
-            # Verify cleaning didn't produce empty result
-            if df_clean is None or len(df_clean) == 0:
-                st.error("Data cleaning resulted in empty dataset")
-                st.info("Using original data instead...")
+        # Only clean data if not already cleaned
+        if not st.session_state.data_cleaned:
+            # Clean the data with error handling
+            try:
+                with st.spinner("Cleaning data..."):
+                    df_clean = clean_dataframe(st.session_state.df)
+                
+                # Verify cleaning didn't produce empty result
+                if df_clean is None or len(df_clean) == 0:
+                    st.error("Data cleaning resulted in empty dataset")
+                    st.info("Using original data instead...")
+                    df_clean = st.session_state.df
+                else:
+                    st.session_state.data_cleaned = True
+                    
+            except Exception as e:
+                st.error(f"Error during data cleaning: {str(e)}")
+                st.info("Continuing with original data...")
                 df_clean = st.session_state.df
                 
-        except Exception as e:
-            st.error(f"Error during data cleaning: {str(e)}")
-            st.info("Continuing with original data...")
+                # Show error details in expander
+                with st.expander("Error Details"):
+                    st.code(str(e))
+            
+            # Save cleaned data
+            st.session_state.df = df_clean
+        else:
+            # Use already cleaned data
             df_clean = st.session_state.df
-            
-            # Show error details in expander
-            with st.expander("Error Details"):
-                st.code(str(e))
         
-        # Data quality assessment
-        try:
-            from utils.validation import validate_dataframe, get_data_quality_score
-            
-            with st.spinner("Analyzing data quality..."):
-                quality_score = get_data_quality_score(df_clean)
-                validation_result = validate_dataframe(df_clean)
-        except Exception as e:
-            st.warning(f"Could not assess data quality: {str(e)}")
-            # Provide default values
-            quality_score = 50
-            validation_result = {
+        # Data quality assessment - only run once
+        if not st.session_state.structure_detected:
+            try:
+                from utils.validation import validate_dataframe, get_data_quality_score
+                
+                with st.spinner("Analyzing data quality..."):
+                    quality_score = get_data_quality_score(df_clean)
+                    validation_result = validate_dataframe(df_clean)
+                    
+                    # Cache results
+                    st.session_state.quality_score = quality_score
+                    st.session_state.validation_result = validation_result
+                    
+            except Exception as e:
+                st.warning(f"Could not assess data quality: {str(e)}")
+                # Provide default values
+                quality_score = 50
+                validation_result = {
+                    'row_count': len(df_clean),
+                    'column_count': len(df_clean.columns),
+                    'missing_percentage': 0,
+                    'duplicate_rows': 0,
+                    'issues': [],
+                    'warnings': []
+                }
+                st.session_state.quality_score = quality_score
+                st.session_state.validation_result = validation_result
+        else:
+            # Use cached results
+            quality_score = st.session_state.get('quality_score', 50)
+            validation_result = st.session_state.get('validation_result', {
                 'row_count': len(df_clean),
                 'column_count': len(df_clean.columns),
                 'missing_percentage': 0,
                 'duplicate_rows': 0,
                 'issues': [],
                 'warnings': []
-            }
+            })
         
         # Display quality metrics
         st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Data Quality Assessment</h3>', unsafe_allow_html=True)
@@ -522,13 +599,10 @@ with tab2:
         with col1:
             # Quality score
             if quality_score >= 80:
-                color = "green"
                 status = "Excellent"
             elif quality_score >= 60:
-                color = "orange"
                 status = "Good"
             else:
-                color = "red"
                 status = "Needs Improvement"
             
             st.metric("Quality Score", f"{quality_score:.0f}/100")
@@ -557,19 +631,27 @@ with tab2:
         
         st.markdown("---")
         
-        # Structure detection
-        st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Structure Detection</h3>', unsafe_allow_html=True)
-        
-        try:
-            with st.spinner("Detecting data structure..."):
-                structure, date_col, entity_col = detect_data_structure(df_clean)
+        # Structure detection - only run once
+        if not st.session_state.structure_detected:
+            st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Structure Detection</h3>', unsafe_allow_html=True)
+            
+            try:
+                with st.spinner("Detecting data structure..."):
+                    structure, date_col, entity_col = detect_data_structure(df_clean)
+                    st.session_state.data_structure = (structure, date_col, entity_col)
+                    st.session_state.structure_detected = True
+            except Exception as e:
+                st.warning(f"Could not detect data structure: {str(e)}")
+                structure = "General Data"
+                date_col = None
+                entity_col = None
                 st.session_state.data_structure = (structure, date_col, entity_col)
-        except Exception as e:
-            st.warning(f"Could not detect data structure: {str(e)}")
-            structure = "General Data"
-            date_col = None
-            entity_col = None
-            st.session_state.data_structure = (structure, date_col, entity_col)
+                st.session_state.structure_detected = True
+        else:
+            st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Structure Detection</h3>', unsafe_allow_html=True)
+        
+        # Get structure from session state
+        structure, date_col, entity_col = st.session_state.data_structure
         
         col1, col2 = st.columns(2)
         
@@ -627,9 +709,6 @@ with tab2:
                 st.dataframe(col_info, use_container_width=True)
             except Exception as e:
                 st.error(f"Could not generate column information: {str(e)}")
-        
-        # Save cleaned data
-        st.session_state.df = df_clean
         
         # Quick actions
         st.markdown("---")

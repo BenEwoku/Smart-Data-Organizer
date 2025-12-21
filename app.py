@@ -17,6 +17,7 @@ from utils.auth import (
 from utils.payment import show_pricing_page, show_billing_portal
 from admin_panel import show_admin_panel
 from utils.validation import validate_data_input, validate_dataframe, get_data_quality_score
+import pandas as pd
 
 
 # Page configuration
@@ -395,6 +396,19 @@ with tab1:
                         progress_bar.progress(80)
                         
                         if df_raw is not None:
+                            # Clean column names before storing
+                            import pandas as pd
+                            
+                            # Fill NaN column names
+                            df_raw.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df_raw.columns)]
+                            
+                            # Handle duplicate column names
+                            cols = pd.Series(df_raw.columns)
+                            for dup in cols[cols.duplicated()].unique():
+                                cols[cols == dup] = [f'{dup}_{i}' if i != 0 else dup for i in range(sum(cols == dup))]
+                            
+                            df_raw.columns = cols
+                            
                             st.session_state.df = df_raw
                             # Increment conversion count
                             increment_conversion_count(st.session_state.user_email)
@@ -443,6 +457,19 @@ with tab1:
                         df_raw = parse_uploaded_file(uploaded_file)
                         
                         if df_raw is not None and len(df_raw) > 0:
+                            # Clean column names before storing
+                            import pandas as pd
+                            
+                            # Fill NaN column names
+                            df_raw.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df_raw.columns)]
+                            
+                            # Handle duplicate column names
+                            cols = pd.Series(df_raw.columns)
+                            for dup in cols[cols.duplicated()].unique():
+                                cols[cols == dup] = [f'{dup}_{i}' if i != 0 else dup for i in range(sum(cols == dup))]
+                            
+                            df_raw.columns = cols
+                            
                             st.session_state.df = df_raw
                             st.session_state.last_uploaded_file = file_id
                             st.session_state.file_processed = True
@@ -452,13 +479,31 @@ with tab1:
                             
                             # Show preview
                             with st.expander("Data Preview", expanded=True):
-                                st.dataframe(df_raw.head(10), use_container_width=True)
+                                # Clean column names for display
+                                df_display = df_raw.copy()
+                                
+                                # 1. Fill NaN column names (already done but keep for safety)
+                                df_display.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df_display.columns)]
+                                
+                                # 2. Handle duplicate column names (already done but keep for safety)
+                                cols_display = pd.Series(df_display.columns)
+                                for dup in cols_display[cols_display.duplicated()].unique():
+                                    cols_display[cols_display == dup] = [f'{dup}_{i}' if i != 0 else dup for i in range(sum(cols_display == dup))]
+                                
+                                df_display.columns = cols_display
+                                
+                                st.dataframe(df_display.head(10), use_container_width=True)
                                 st.caption(f"**Total:** {len(df_raw):,} rows × {len(df_raw.columns)} columns")
+                                
+                                # Show warning if there were issues
+                                original_cols = df_raw.columns.tolist()
+                                if any(pd.isna(col) for col in original_cols) or len(original_cols) != len(set(original_cols)):
+                                    st.warning("Found duplicate or empty column names. These have been renamed for display.")
                             
                             st.success(f"{file_ext.upper()} file processed successfully!")
                             
                             # Auto-advance hint
-                            st.info("Click on the **Detect** tab to continue")
+                            st.info("Click on the Detect tab to continue")
                             
                         else:
                             st.error(f"Could not extract data from {file_ext.upper()} file")
@@ -483,10 +528,23 @@ with tab1:
                     st.success(f"File already loaded: {uploaded_file.name}")
                     
                     with st.expander("Current Data Preview", expanded=False):
-                        st.dataframe(st.session_state.df.head(10), use_container_width=True)
+                        # Clean column names for display
+                        df_display = st.session_state.df.copy()
+                        
+                        # 1. Fill NaN column names
+                        df_display.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df_display.columns)]
+                        
+                        # 2. Handle duplicate column names
+                        cols_display = pd.Series(df_display.columns)
+                        for dup in cols_display[cols_display.duplicated()].unique():
+                            cols_display[cols_display == dup] = [f'{dup}_{i}' if i != 0 else dup for i in range(sum(cols_display == dup))]
+                        
+                        df_display.columns = cols_display
+                        
+                        st.dataframe(df_display.head(10), use_container_width=True)
                         st.caption(f"**Total:** {len(st.session_state.df):,} rows × {len(st.session_state.df.columns)} columns")
                     
-                    st.info("Click on the **Detect** tab to continue, or upload a different file to start over")
+                    st.info("Click on the Detect tab to continue, or upload a different file to start over")
                     
                     # Option to reset
                     if st.button("Upload Different File", type="secondary"):
@@ -504,11 +562,11 @@ with tab1:
         st.code("Date, Sales, Revenue\n2024-01-01, 1500, 45000\n2024-01-02, 2300, 67000\n2024-01-03, 1800, 52000", language="text")
         
         # Panel Data Example
-        st.markdown('<h4 style="font-size: 1.4rem; font-weight: 600; margin-top: 1.5rem;">Panel Data Example:</h4>', unsafe_allow_html=True)
+        st.markdown('<h4 style="font-size: 1.4rem; font-weight: 600;">Panel Data Example:</h4>', unsafe_allow_html=True)
         st.code("Company, Year, Revenue, Profit\nApple, 2022, 394328, 99803\nApple, 2023, 383285, 96995\nGoogle, 2022, 282836, 59972\nGoogle, 2023, 307394, 73795", language="text")
         
         # Tips
-        st.markdown('<h4 style="font-size: 1.4rem; font-weight: 600; margin-top: 1.5rem;">Tips:</h4>', unsafe_allow_html=True)
+        st.markdown('<h4 style="font-size: 1.4rem; font-weight: 600;">Tips:</h4>', unsafe_allow_html=True)
         st.markdown("""
         • **Data can be messy** - the app will clean it automatically  
         • **Multiple delimiters** supported (comma, tab, space, pipe)  

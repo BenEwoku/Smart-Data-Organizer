@@ -52,23 +52,23 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     
-    /* GOOGLE CHROME-STYLE COFFEE BROWN TABS */
+    /* GOOGLE CHROME-STYLE COFFEE BROWN TABS WITH RED PROGRESS BAR */
     .stTabs [data-baseweb="tab-list"] {
         font-size: 1.3rem !important;
         font-weight: 600 !important;
         background-color: transparent !important;
-        padding: 10px 10px 0 10px !important;  /* Add top padding for rounded effect */
+        padding: 10px 10px 0 10px !important;
         margin-bottom: 0 !important;
-        gap: 2px !important;  /* Small gap like Chrome tabs */
+        gap: 4px !important;  /* Increased from 2px for slightly more spacing */
         border-bottom: none !important;
     }
 
     .stTabs [data-baseweb="tab"] {
         background-color: #d7ccc8 !important;  /* Coffee brown */
         color: #5d4037 !important;  /* Dark brown text */
-        padding: 12px 25px 10px 25px !important;
+        padding: 12px 28px 10px 28px !important;  /* Slightly wider padding */
         margin: 0 !important;
-        border-radius: 10px 10px 0 0 !important;  /* Rounded top corners like Chrome */
+        border-radius: 12px 12px 0 0 !important;  /* Slightly more rounded */
         border: 1px solid #bcaaa4 !important;
         border-bottom: none !important;
         transition: all 0.2s ease !important;
@@ -78,9 +78,9 @@ st.markdown("""
         box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.05);
     }
 
-    /* Connect tabs like Chrome - overlap slightly */
+    /* Add small spacing between tabs (instead of overlap) */
     .stTabs [data-baseweb="tab"]:not(:first-child) {
-        margin-left: -5px !important;
+        margin-left: 2px !important;  /* Small space instead of -5px overlap */
     }
 
     .stTabs [data-baseweb="tab"]:hover {
@@ -98,22 +98,30 @@ st.markdown("""
         border: 2px solid #a1887f !important;
         border-bottom: 2px solid white !important;  /* Connect to content */
         z-index: 100 !important;
-        padding: 12px 25px 12px 25px !important;  /* Slightly taller */
+        padding: 12px 28px 12px 28px !important;
         box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.08);
         position: relative;
     }
 
-    /* Add subtle curve at bottom corners of active tab */
+    /* RED PROGRESS BAR FOR ACTIVE TAB (replaces the white one) */
     .stTabs [data-baseweb="tab"][aria-selected="true"]::before {
         content: '';
         position: absolute;
         bottom: -2px;
         left: -2px;
         right: -2px;
-        height: 6px;
-        background-color: white;
+        height: 4px;  /* Progress bar height */
+        background: linear-gradient(90deg, #ff6b6b 0%, #ff5252 50%, #ff3838 100%) !important;  /* Red gradient */
         border-radius: 0 0 3px 3px;
         z-index: 101;
+        animation: pulse-red 2s infinite ease-in-out;  /* Optional animation */
+    }
+
+    /* Optional: Add a pulsing animation to the red progress bar */
+    @keyframes pulse-red {
+        0% { opacity: 0.8; }
+        50% { opacity: 1; }
+        100% { opacity: 0.8; }
     }
 
     /* Remove the default blue indicator */
@@ -121,14 +129,14 @@ st.markdown("""
         display: none !important;
     }
 
-    /* Tab content area - connect seamlessly with active tab */
+    /* Tab content area */
     .stTabs [data-baseweb="tab-panel"] {
         background-color: white !important;
         padding: 25px !important;
         border-radius: 0 0 8px 8px !important;
         border: 2px solid #a1887f !important;
         border-top: none !important;
-        margin-top: -2px !important;  /* Pull up to connect with tabs */
+        margin-top: -2px !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         position: relative;
         z-index: 50;

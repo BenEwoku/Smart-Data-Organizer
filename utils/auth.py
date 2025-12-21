@@ -187,7 +187,22 @@ def get_admin_list():
     """Get list of all admin emails from Google Sheets"""
     try:
         all_users = gsheets_db.get_all_users_from_sheet()
-        admin_emails = [user['email'] for user in all_users if user.get('is_admin', False)]
+        admin_emails = []
+        
+        for user in all_users:
+            # Handle different is_admin formats
+            is_admin_flag = user.get('is_admin', False)
+            
+            # Convert string "TRUE"/"FALSE" to boolean
+            if isinstance(is_admin_flag, str):
+                is_admin_bool = is_admin_flag.lower() == 'true'
+            elif isinstance(is_admin_flag, int):
+                is_admin_bool = bool(is_admin_flag)
+            else:
+                is_admin_bool = bool(is_admin_flag)
+            
+            if is_admin_bool:
+                admin_emails.append(user['email'])
         
         # Always include default admins
         default_admins = ['admin@smartdata.com']
@@ -196,15 +211,18 @@ def get_admin_list():
         except:
             pass
         
+        # Combine and deduplicate
         all_admins = list(set(admin_emails + default_admins))
         return all_admins
-    except:
+        
+    except Exception as e:
+        print(f"Error getting admin list: {str(e)}")
         return ['admin@smartdata.com', st.secrets.get("admin", {}).get("admin_email", 'admin@example.com')]
 
 # REPLACE the existing is_admin() function with this:
 def is_admin(user_email):
     """Check if user is admin - Now checks both default list and user data"""
-    # Check default admin list
+    # Check default admin list first
     default_admins = ['admin@smartdata.com']
     try:
         default_admins.append(st.secrets["admin"]["admin_email"])
@@ -216,8 +234,21 @@ def is_admin(user_email):
     
     # Check user data for admin flag
     user = gsheets_db.get_user_from_sheet(user_email)
-    if user and user.get('is_admin', False):
-        return True
+    
+    if user:
+        # Handle different is_admin formats
+        is_admin_flag = user.get('is_admin', False)
+        
+        # Convert string "TRUE"/"FALSE" to boolean
+        if isinstance(is_admin_flag, str):
+            return is_admin_flag.lower() == 'true'
+        
+        # Convert integer 1/0 to boolean
+        if isinstance(is_admin_flag, int):
+            return bool(is_admin_flag)
+        
+        # Already boolean
+        return bool(is_admin_flag)
     
     return False
 
@@ -234,12 +265,19 @@ def promote_to_admin(email):
     if not user:
         return False, "User not found"
     
+    # Update with boolean TRUE (not string)
     success = gsheets_db.update_user_in_sheet(email, {'is_admin': True})
     
     if success:
+        # Update current session if it's the logged-in user
         if st.session_state.get('user_email') == email:
             st.session_state.is_admin = True
             st.session_state.user_data['is_admin'] = True
+        
+        # Clear cache to reflect changes immediately
+        if 'user_cache' in st.session_state:
+            if email in st.session_state.user_cache:
+                st.session_state.user_cache[email]['is_admin'] = True
         
         return True, f"{email} is now an admin"
     else:
@@ -269,12 +307,19 @@ def demote_from_admin(email):
     if email == current_user_email and len(all_admins) <= 1:
         return False, "Cannot demote yourself - you're the only admin"
     
+    # Update with boolean FALSE (not string)
     success = gsheets_db.update_user_in_sheet(email, {'is_admin': False})
     
     if success:
+        # Update current session if it's the logged-in user
         if st.session_state.get('user_email') == email:
             st.session_state.is_admin = False
             st.session_state.user_data['is_admin'] = False
+        
+        # Clear cache to reflect changes immediately
+        if 'user_cache' in st.session_state:
+            if email in st.session_state.user_cache:
+                st.session_state.user_cache[email]['is_admin'] = False
         
         return True, f"{email} is no longer an admin"
     else:

@@ -82,35 +82,101 @@ def organize_panel_data(df, date_col, entity_col):
     """
     df = df.copy()
     
-    st.subheader("📊 Panel Data Organization")
+    st.subheader("Panel Data Organization")
+    
+    # SAFETY CHECK 1: Validate date_col exists
+    if date_col not in df.columns:
+        st.warning(f"Date column '{date_col}' not found. Attempting to find date column...")
+        
+        # Look for columns with 'date', 'time', 'year', 'month' in name (case-insensitive)
+        date_like_cols = [col for col in df.columns if any(
+            keyword in str(col).lower() for keyword in ['date', 'time', 'year', 'month', 'day']
+        )]
+        
+        if date_like_cols:
+            date_col = date_like_cols[0]
+            st.info(f"Using column '{date_col}' as date column.")
+        else:
+            # Try to find datetime columns
+            datetime_cols = [col for col in df.columns if pd.api.types.is_datetime64_any_dtype(df[col])]
+            if datetime_cols:
+                date_col = datetime_cols[0]
+                st.info(f"Using datetime column '{date_col}' as date column.")
+            else:
+                st.error("No suitable date column found. Panel organization may not work correctly.")
+    
+    # SAFETY CHECK 2: Validate entity_col exists
+    if entity_col not in df.columns:
+        st.warning(f"Entity column '{entity_col}' not found. Attempting to find entity column...")
+        
+        # Strategy 1: Look for column that STARTS WITH the original name
+        # (catches 'Anhui Province' -> 'Anhui Province_1')
+        possible_cols = [col for col in df.columns if str(col).startswith(str(entity_col))]
+        
+        if possible_cols:
+            entity_col = possible_cols[0]
+            st.info(f"Using column '{entity_col}' for entities.")
+        else:
+            # Strategy 2: Look for columns with entity-like names
+            entity_like_cols = [col for col in df.columns if any(
+                keyword in str(col).lower() for keyword in ['name', 'id', 'code', 'region', 'country', 'company', 'entity']
+            )]
+            
+            if entity_like_cols:
+                entity_col = entity_like_cols[0]
+                st.info(f"Using column '{entity_col}' as entity column.")
+            else:
+                # Strategy 3: Use first non-date string column
+                non_date_cols = [col for col in df.columns if col != date_col and pd.api.types.is_string_dtype(df[col])]
+                if non_date_cols:
+                    entity_col = non_date_cols[0]
+                    st.info(f"Using first string column '{entity_col}' as entity column.")
+                else:
+                    # Last resort: Use first non-date column
+                    other_cols = [col for col in df.columns if col != date_col]
+                    entity_col = other_cols[0] if other_cols else df.columns[0]
+                    st.warning(f"No suitable entity column found. Using '{entity_col}'. Results may be inaccurate.")
+    
+    # Now safely proceed with organization
+    st.info(f"Organizing: Date='{date_col}', Entity='{entity_col}'")
     
     # Convert date column
     try:
         df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
-    except:
-        pass
+        st.success(f"Converted '{date_col}' to datetime format")
+    except Exception as e:
+        st.warning(f"Could not convert date column: {str(e)}")
     
     # Sort by entity then date
     try:
         df = df.sort_values([entity_col, date_col])
-        st.success(f"✓ Sorted by {entity_col} → {date_col}")
-    except:
-        st.warning("Could not sort panel data")
+        st.success(f"Sorted by {entity_col} → {date_col}")
+    except Exception as e:
+        st.warning(f"Could not sort panel data: {str(e)}")
     
-    # Panel statistics
+    # Panel statistics - WITH SAFETY CHECK
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        n_entities = df[entity_col].nunique()
-        st.metric("Entities", n_entities)
+        try:
+            n_entities = df[entity_col].nunique()
+            st.metric("Entities", n_entities)
+        except:
+            st.metric("Entities", "N/A")
     
     with col2:
-        n_periods = df[date_col].nunique() if date_col in df.columns else 0
-        st.metric("Time Periods", n_periods)
+        try:
+            n_periods = df[date_col].nunique() if date_col in df.columns else 0
+            st.metric("Time Periods", n_periods)
+        except:
+            st.metric("Time Periods", "N/A")
     
     with col3:
-        obs_per_entity = len(df) / n_entities if n_entities > 0 else 0
-        st.metric("Avg Obs/Entity", f"{obs_per_entity:.1f}")
+        try:
+            obs_per_entity = len(df) / n_entities if n_entities > 0 else 0
+            st.metric("Avg Obs/Entity", f"{obs_per_entity:.1f}")
+        except:
+            st.metric("Avg Obs/Entity", "N/A")
     
     # Check balance
     try:
@@ -118,14 +184,16 @@ def organize_panel_data(df, date_col, entity_col):
         is_balanced = counts.nunique() == 1
         
         if is_balanced:
-            st.success("✓ Balanced panel: All entities have same number of observations")
+            st.success("Balanced panel: All entities have same number of observations")
         else:
-            st.info("ℹ️ Unbalanced panel: Entities have different number of observations")
-    except:
-        pass
+            min_obs = counts.min()
+            max_obs = counts.max()
+            st.info(f"Unbalanced panel: Observations range from {min_obs} to {max_obs} per entity")
+    except Exception as e:
+        st.warning(f"Could not check panel balance: {str(e)}")
     
     # Optional: Pivot to wide format
-    with st.expander("🔧 Advanced Options"):
+    with st.expander("Advanced Options"):
         format_choice = st.radio(
             "Data format:",
             ["Long format (current)", "Wide format (pivot)"],

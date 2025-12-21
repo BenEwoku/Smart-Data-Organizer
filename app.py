@@ -803,10 +803,21 @@ with tab3:
         df = st.session_state.df
         structure, date_col, entity_col = st.session_state.data_structure
         
-        if structure == "Time Series" and date_col:
-            df_organized = organize_time_series(df, date_col)
-        elif structure == "Panel Data" and date_col and entity_col:
-            df_organized = organize_panel_data(df, date_col, entity_col)
+        # SAFETY CHECK: Ensure columns exist before organizing
+        if structure == "Time Series":
+            if date_col and date_col in df.columns:
+                df_organized = organize_time_series(df, date_col)
+            else:
+                st.warning(f"Date column '{date_col}' not found in data. Using general organization.")
+                df_organized = df.copy()
+                
+        elif structure == "Panel Data":
+            if date_col and entity_col:
+                df_organized = organize_panel_data(df, date_col, entity_col)
+            else:
+                st.warning("Missing date or entity column for panel data. Using general organization.")
+                df_organized = df.copy()
+                
         elif structure == "Cross-Sectional":
             df_organized = organize_cross_sectional(df)
         else:

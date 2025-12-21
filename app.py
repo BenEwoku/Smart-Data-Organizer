@@ -474,16 +474,45 @@ with tab2:
     if st.session_state.df is not None:
         st.markdown('<h2 class="subheader">Step 2: Data Structure Detection</h2>', unsafe_allow_html=True)
         
-        # Clean the data
-        with st.spinner("Cleaning data..."):
-            df_clean = clean_dataframe(st.session_state.df)
+        # Clean the data with error handling
+        try:
+            with st.spinner("Cleaning data..."):
+                df_clean = clean_dataframe(st.session_state.df)
+            
+            # Verify cleaning didn't produce empty result
+            if df_clean is None or len(df_clean) == 0:
+                st.error("Data cleaning resulted in empty dataset")
+                st.info("Using original data instead...")
+                df_clean = st.session_state.df
+                
+        except Exception as e:
+            st.error(f"Error during data cleaning: {str(e)}")
+            st.info("Continuing with original data...")
+            df_clean = st.session_state.df
+            
+            # Show error details in expander
+            with st.expander("Error Details"):
+                st.code(str(e))
         
         # Data quality assessment
-        from utils.validation import validate_dataframe, get_data_quality_score
-        
-        with st.spinner("Analyzing data quality..."):
-            quality_score = get_data_quality_score(df_clean)
-            validation_result = validate_dataframe(df_clean)
+        try:
+            from utils.validation import validate_dataframe, get_data_quality_score
+            
+            with st.spinner("Analyzing data quality..."):
+                quality_score = get_data_quality_score(df_clean)
+                validation_result = validate_dataframe(df_clean)
+        except Exception as e:
+            st.warning(f"Could not assess data quality: {str(e)}")
+            # Provide default values
+            quality_score = 50
+            validation_result = {
+                'row_count': len(df_clean),
+                'column_count': len(df_clean.columns),
+                'missing_percentage': 0,
+                'duplicate_rows': 0,
+                'issues': [],
+                'warnings': []
+            }
         
         # Display quality metrics
         st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Data Quality Assessment</h3>', unsafe_allow_html=True)
@@ -516,22 +545,30 @@ with tab2:
             st.metric("Missing Data", f"{missing_pct:.1f}%")
         
         # Show issues and warnings
-        if validation_result["issues"]:
+        if validation_result.get("issues"):
             with st.expander("Issues Found", expanded=True):
                 for issue in validation_result["issues"]:
-                    st.error(f"{issue}")
+                    st.error(f"• {issue}")
         
-        if validation_result["warnings"]:
+        if validation_result.get("warnings"):
             with st.expander("Warnings", expanded=False):
                 for warning in validation_result["warnings"]:
-                    st.warning(f"{warning}")
+                    st.warning(f"• {warning}")
         
         st.markdown("---")
         
         # Structure detection
         st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Structure Detection</h3>', unsafe_allow_html=True)
-        with st.spinner("Detecting data structure..."):
-            structure, date_col, entity_col = detect_data_structure(df_clean)
+        
+        try:
+            with st.spinner("Detecting data structure..."):
+                structure, date_col, entity_col = detect_data_structure(df_clean)
+                st.session_state.data_structure = (structure, date_col, entity_col)
+        except Exception as e:
+            st.warning(f"Could not detect data structure: {str(e)}")
+            structure = "General Data"
+            date_col = None
+            entity_col = None
             st.session_state.data_structure = (structure, date_col, entity_col)
         
         col1, col2 = st.columns(2)
@@ -565,25 +602,31 @@ with tab2:
         # Data preview
         st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Cleaned Data Preview</h3>', unsafe_allow_html=True)
         
-        # Add pagination for large datasets
-        if len(df_clean) > 100:
-            st.info(f"Showing first 100 of {len(df_clean):,} rows")
-            st.dataframe(df_clean.head(100), use_container_width=True, height=300)
-        else:
-            st.dataframe(df_clean, use_container_width=True, height=300)
+        try:
+            # Add pagination for large datasets
+            if len(df_clean) > 100:
+                st.info(f"Showing first 100 of {len(df_clean):,} rows")
+                st.dataframe(df_clean.head(100), use_container_width=True, height=300)
+            else:
+                st.dataframe(df_clean, use_container_width=True, height=300)
+        except Exception as e:
+            st.error(f"Could not display data preview: {str(e)}")
         
         # Column information
         with st.expander("Detailed Column Information"):
-            col_info = []
-            for col in df_clean.columns:
-                col_info.append({
-                    "Column Name": col,
-                    "Data Type": str(df_clean[col].dtype),
-                    "Non-Null Values": df_clean[col].notna().sum(),
-                    "Null Values": df_clean[col].isna().sum(),
-                    "Unique Values": df_clean[col].nunique()
-                })
-            st.dataframe(col_info, use_container_width=True)
+            try:
+                col_info = []
+                for col in df_clean.columns:
+                    col_info.append({
+                        "Column Name": col,
+                        "Data Type": str(df_clean[col].dtype),
+                        "Non-Null Values": df_clean[col].notna().sum(),
+                        "Null Values": df_clean[col].isna().sum(),
+                        "Unique Values": df_clean[col].nunique()
+                    })
+                st.dataframe(col_info, use_container_width=True)
+            except Exception as e:
+                st.error(f"Could not generate column information: {str(e)}")
         
         # Save cleaned data
         st.session_state.df = df_clean
@@ -600,13 +643,17 @@ with tab2:
         
         with col2:
             if st.button("Remove Duplicates", use_container_width=True):
-                if validation_result['duplicate_rows'] > 0:
-                    df_clean = df_clean.drop_duplicates()
-                    st.session_state.df = df_clean
-                    st.success(f"Removed {validation_result['duplicate_rows']} duplicate rows")
-                    st.rerun()
-                else:
-                    st.info("No duplicate rows found")
+                try:
+                    dup_count = validation_result.get('duplicate_rows', 0)
+                    if dup_count > 0:
+                        df_clean = df_clean.drop_duplicates()
+                        st.session_state.df = df_clean
+                        st.success(f"Removed {dup_count} duplicate rows")
+                        st.rerun()
+                    else:
+                        st.info("No duplicate rows found")
+                except Exception as e:
+                    st.error(f"Could not remove duplicates: {str(e)}")
         
     else:
         st.info("Please input data in the Input tab first")

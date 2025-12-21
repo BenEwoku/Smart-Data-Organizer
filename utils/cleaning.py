@@ -52,14 +52,17 @@ def clean_column_names(df):
     Returns:
         pd.DataFrame: DataFrame with cleaned column names
     """
-    # Strip whitespace
-    df.columns = df.columns.str.strip()
+    if df is None or len(df) == 0:
+        return df
     
-    # Replace multiple spaces with single space
-    df.columns = df.columns.str.replace(r'\s+', ' ', regex=True)
-    
-    # Remove special characters (optional - keep only alphanumeric and spaces)
-    # df.columns = df.columns.str.replace(r'[^a-zA-Z0-9\s_]', '', regex=True)
+    try:
+        # Strip whitespace
+        df.columns = df.columns.str.strip()
+        
+        # Replace multiple spaces with single space
+        df.columns = df.columns.str.replace(r'\s+', ' ', regex=True)
+    except Exception as e:
+        print(f"Error cleaning column names: {str(e)}")
     
     return df
 
@@ -73,12 +76,19 @@ def strip_whitespace(df):
     Returns:
         pd.DataFrame: DataFrame with stripped strings
     """
-    for col in df.columns:
-        if df[col].dtype == 'object':
-            try:
-                df[col] = df[col].astype(str).str.strip()
-            except:
-                pass
+    if df is None or len(df) == 0:
+        return df
+    
+    try:
+        for col in df.columns:
+            # Check if column exists and is object type
+            if col in df.columns and df[col].dtype == 'object':
+                try:
+                    df[col] = df[col].astype(str).str.strip()
+                except Exception as e:
+                    print(f"Could not strip whitespace from column {col}: {str(e)}")
+    except Exception as e:
+        print(f"Error in strip_whitespace: {str(e)}")
     
     return df
 
@@ -92,21 +102,27 @@ def convert_numeric_columns(df):
     Returns:
         pd.DataFrame: DataFrame with converted numeric columns
     """
-    for col in df.columns:
-        if df[col].dtype == 'object':
-            try:
-                # Remove common numeric formatting (commas, currency symbols)
-                cleaned = df[col].astype(str).str.replace(',', '', regex=False)
-                cleaned = cleaned.str.replace('$', '', regex=False)
-                cleaned = cleaned.str.replace('€', '', regex=False)
-                cleaned = cleaned.str.replace('£', '', regex=False)
-                cleaned = cleaned.str.replace('%', '', regex=False)
-                cleaned = cleaned.str.strip()
-                
-                # Try to convert to numeric
-                df[col] = pd.to_numeric(cleaned, errors='ignore')
-            except:
-                pass
+    if df is None or len(df) == 0:
+        return df
+    
+    try:
+        for col in df.columns:
+            if col in df.columns and df[col].dtype == 'object':
+                try:
+                    # Remove common numeric formatting (commas, currency symbols)
+                    cleaned = df[col].astype(str).str.replace(',', '', regex=False)
+                    cleaned = cleaned.str.replace('$', '', regex=False)
+                    cleaned = cleaned.str.replace('€', '', regex=False)
+                    cleaned = cleaned.str.replace('£', '', regex=False)
+                    cleaned = cleaned.str.replace('%', '', regex=False)
+                    cleaned = cleaned.str.strip()
+                    
+                    # Try to convert to numeric
+                    df[col] = pd.to_numeric(cleaned, errors='ignore')
+                except Exception as e:
+                    print(f"Could not convert column {col} to numeric: {str(e)}")
+    except Exception as e:
+        print(f"Error in convert_numeric_columns: {str(e)}")
     
     return df
 
@@ -120,15 +136,21 @@ def standardize_text_case(df):
     Returns:
         pd.DataFrame: DataFrame with standardized text case
     """
-    for col in df.columns:
-        if df[col].dtype == 'object':
-            try:
-                # Title case for names, proper nouns
-                # Only apply to short strings (likely names/categories)
-                if df[col].str.len().mean() < 30:
-                    df[col] = df[col].str.title()
-            except:
-                pass
+    if df is None or len(df) == 0:
+        return df
+    
+    try:
+        for col in df.columns:
+            if col in df.columns and df[col].dtype == 'object':
+                try:
+                    # Title case for names, proper nouns
+                    # Only apply to short strings (likely names/categories)
+                    if df[col].str.len().mean() < 30:
+                        df[col] = df[col].str.title()
+                except Exception as e:
+                    print(f"Could not standardize case for column {col}: {str(e)}")
+    except Exception as e:
+        print(f"Error in standardize_text_case: {str(e)}")
     
     return df
 
@@ -145,26 +167,35 @@ def remove_outliers(df, columns=None, method='iqr', threshold=1.5):
     Returns:
         pd.DataFrame: DataFrame with outliers removed
     """
+    if df is None or len(df) == 0:
+        return df
+    
     df = df.copy()
     
-    if columns is None:
-        columns = df.select_dtypes(include=['number']).columns
-    
-    for col in columns:
-        if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
-            if method == 'iqr':
-                Q1 = df[col].quantile(0.25)
-                Q3 = df[col].quantile(0.75)
-                IQR = Q3 - Q1
-                lower = Q1 - threshold * IQR
-                upper = Q3 + threshold * IQR
-                df = df[(df[col] >= lower) & (df[col] <= upper)]
-                
-            elif method == 'zscore':
-                from scipy import stats
-                z_scores = stats.zscore(df[col].dropna())
-                abs_z_scores = abs(z_scores)
-                df = df[abs_z_scores < threshold]
+    try:
+        if columns is None:
+            columns = df.select_dtypes(include=['number']).columns
+        
+        for col in columns:
+            if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+                if method == 'iqr':
+                    Q1 = df[col].quantile(0.25)
+                    Q3 = df[col].quantile(0.75)
+                    IQR = Q3 - Q1
+                    lower = Q1 - threshold * IQR
+                    upper = Q3 + threshold * IQR
+                    df = df[(df[col] >= lower) & (df[col] <= upper)]
+                    
+                elif method == 'zscore':
+                    try:
+                        from scipy import stats
+                        z_scores = stats.zscore(df[col].dropna())
+                        abs_z_scores = abs(z_scores)
+                        df = df[abs_z_scores < threshold]
+                    except ImportError:
+                        print("scipy not installed, skipping z-score method")
+    except Exception as e:
+        print(f"Error removing outliers: {str(e)}")
     
     return df
 
@@ -181,23 +212,32 @@ def fill_missing_values(df, method='ffill', columns=None):
     Returns:
         pd.DataFrame: DataFrame with filled values
     """
+    if df is None or len(df) == 0:
+        return df
+    
     df = df.copy()
     
-    if columns is None:
-        columns = df.columns
-    
-    for col in columns:
-        if col in df.columns:
-            if method == 'ffill':
-                df[col] = df[col].fillna(method='ffill')
-            elif method == 'bfill':
-                df[col] = df[col].fillna(method='bfill')
-            elif method == 'mean' and pd.api.types.is_numeric_dtype(df[col]):
-                df[col] = df[col].fillna(df[col].mean())
-            elif method == 'median' and pd.api.types.is_numeric_dtype(df[col]):
-                df[col] = df[col].fillna(df[col].median())
-            else:
-                df[col] = df[col].fillna(method)
+    try:
+        if columns is None:
+            columns = df.columns
+        
+        for col in columns:
+            if col in df.columns:
+                try:
+                    if method == 'ffill':
+                        df[col] = df[col].ffill()
+                    elif method == 'bfill':
+                        df[col] = df[col].bfill()
+                    elif method == 'mean' and pd.api.types.is_numeric_dtype(df[col]):
+                        df[col] = df[col].fillna(df[col].mean())
+                    elif method == 'median' and pd.api.types.is_numeric_dtype(df[col]):
+                        df[col] = df[col].fillna(df[col].median())
+                    else:
+                        df[col] = df[col].fillna(method)
+                except Exception as e:
+                    print(f"Could not fill values in column {col}: {str(e)}")
+    except Exception as e:
+        print(f"Error filling missing values: {str(e)}")
     
     return df
 
@@ -213,25 +253,31 @@ def standardize_date_formats(df, date_columns=None, target_format='%Y-%m-%d'):
     Returns:
         pd.DataFrame: DataFrame with standardized dates
     """
+    if df is None or len(df) == 0:
+        return df
+    
     df = df.copy()
     
-    if date_columns is None:
-        # Auto-detect date columns
-        date_columns = []
-        for col in df.columns:
-            try:
-                pd.to_datetime(df[col], errors='coerce')
-                if df[col].notna().sum() > len(df) * 0.5:
-                    date_columns.append(col)
-            except:
-                pass
-    
-    for col in date_columns:
-        if col in df.columns:
-            try:
-                df[col] = pd.to_datetime(df[col], errors='coerce')
-                df[col] = df[col].dt.strftime(target_format)
-            except:
-                pass
+    try:
+        if date_columns is None:
+            # Auto-detect date columns
+            date_columns = []
+            for col in df.columns:
+                try:
+                    test = pd.to_datetime(df[col], errors='coerce')
+                    if test.notna().sum() > len(df) * 0.5:
+                        date_columns.append(col)
+                except:
+                    pass
+        
+        for col in date_columns:
+            if col in df.columns:
+                try:
+                    df[col] = pd.to_datetime(df[col], errors='coerce')
+                    df[col] = df[col].dt.strftime(target_format)
+                except Exception as e:
+                    print(f"Could not standardize dates in column {col}: {str(e)}")
+    except Exception as e:
+        print(f"Error standardizing date formats: {str(e)}")
     
     return df

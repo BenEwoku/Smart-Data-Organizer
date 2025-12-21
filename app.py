@@ -1384,45 +1384,61 @@ with tab2:
                     st.warning(f"• {warning}")
         
         st.markdown("---")
-        
+                
         # Structure detection - only run once
         if not st.session_state.structure_detected:
             st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Structure Detection</h3>', unsafe_allow_html=True)
             
             try:
                 with st.spinner("Detecting data structure..."):
+                    # Use the safe detection function
                     structure, date_col, entity_col = detect_data_structure(df_clean)
+                    
+                    # VALIDATE the result
+                    if structure is None:
+                        st.error("Detection returned None structure. Using defaults.")
+                        structure, date_col, entity_col = ("General Data", None, None)
+                    
+                    # Store in session state
                     st.session_state.data_structure = (structure, date_col, entity_col)
                     st.session_state.structure_detected = True
+                    
+                    # Show success
+                    st.success(f"✓ Detected: {structure}")
+                    if date_col:
+                        st.info(f"Date column: {date_col}")
+                    if entity_col:
+                        st.info(f"Entity column: {entity_col}")
+                        
             except Exception as e:
-                st.warning(f"Could not detect data structure: {str(e)}")
-                structure = "General Data"
-                date_col = None
-                entity_col = None
+                st.error(f"Could not detect data structure: {str(e)}")
+                # Set safe defaults
+                structure, date_col, entity_col = ("General Data", None, None)
                 st.session_state.data_structure = (structure, date_col, entity_col)
                 st.session_state.structure_detected = True
         else:
             st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Structure Detection</h3>', unsafe_allow_html=True)
 
-        # ========== ADD VALIDATION HERE ==========
-        # Validate the detected structure
+        # ========== SAFE STRUCTURE UNPACKING ==========
+        # ALWAYS validate before unpacking
         if st.session_state.data_structure is None:
-            st.error("Structure detection returned None. Using default values.")
+            st.warning("Structure data is None. Setting defaults.")
             st.session_state.data_structure = ("General Data", None, None)
+
+        try:
+            structure, date_col, entity_col = st.session_state.data_structure
+            
+            # Additional validation
+            if not isinstance(structure, str):
+                st.error(f"Invalid structure type: {type(structure)}. Using General Data.")
+                structure = "General Data"
+                st.session_state.data_structure = (structure, date_col, entity_col)
+                
+        except (ValueError, TypeError) as e:
+            st.error(f"Error unpacking structure: {str(e)}. Resetting to defaults.")
             structure, date_col, entity_col = ("General Data", None, None)
-        else:
-            try:
-                structure, date_col, entity_col = st.session_state.data_structure
-                # Additional validation
-                if not isinstance(structure, str) or structure not in ["Time Series", "Panel Data", "Cross-Sectional", "Email Data", "General Data"]:
-                    st.warning(f"Invalid structure type: {structure}. Using General Data.")
-                    st.session_state.data_structure = ("General Data", date_col, entity_col)
-                    structure = "General Data"
-            except (ValueError, TypeError) as e:
-                st.error(f"Invalid structure format: {str(e)}")
-                st.session_state.data_structure = ("General Data", None, None)
-                structure, date_col, entity_col = ("General Data", None, None)
-        # ========== END VALIDATION ==========
+            st.session_state.data_structure = (structure, date_col, entity_col)
+        # ========== END SAFE UNPACKING ==========
         
         col1, col2 = st.columns(2)
         

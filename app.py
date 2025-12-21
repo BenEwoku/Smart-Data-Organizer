@@ -797,11 +797,17 @@ with tab2:
 
 # TAB 3: ORGANIZE
 with tab3:
-    if st.session_state.df is not None and st.session_state.data_structure is not None:
-        st.markdown('<h2 class="subheader">Step 3: Organize & Refine Data</h2>', unsafe_allow_html=True)
-        
-        df = st.session_state.df
-        structure, date_col, entity_col = st.session_state.data_structure
+    # SAFETY CHECK: Ensure data structure is properly initialized
+    if st.session_state.df is None:
+        st.warning("No data loaded. Please input data in the Input tab first.")
+        st.stop()
+    
+    if st.session_state.data_structure is None:
+        # Initialize with default values
+        st.session_state.data_structure = ("General Data", None, None)
+    
+    # Now safely unpack
+    structure, date_col, entity_col = st.session_state.data_structure
         
         # SAFETY CHECK: Ensure columns exist before organizing
         if structure == "Time Series":

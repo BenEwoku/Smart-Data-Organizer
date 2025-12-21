@@ -16,27 +16,35 @@ def parse_uploaded_file(uploaded_file):
         uploaded_file: Streamlit UploadedFile object
         
     Returns:
-        pd.DataFrame or list of DataFrames
+        pd.DataFrame (never returns None)
     """
     file_ext = uploaded_file.name.split('.')[-1].lower()
     
     try:
         if file_ext == 'csv':
-            return parse_csv(uploaded_file)
+            df = parse_csv(uploaded_file)
         elif file_ext == 'txt':
-            return parse_txt(uploaded_file)
+            df = parse_txt(uploaded_file)
         elif file_ext in ['xlsx', 'xls']:
-            return parse_excel(uploaded_file)
+            df = parse_excel(uploaded_file)
         elif file_ext == 'pdf':
-            return parse_pdf(uploaded_file)
+            df = parse_pdf(uploaded_file)
         elif file_ext in ['docx', 'doc']:
-            return parse_docx(uploaded_file)
+            df = parse_docx(uploaded_file)
         else:
             st.error(f"Unsupported file type: {file_ext}")
-            return None
+            # Return empty DataFrame instead of None
+            return pd.DataFrame({"Error": [f"Unsupported file type: {file_ext}"]})
     except Exception as e:
         st.error(f"Error parsing {file_ext.upper()} file: {str(e)}")
-        return None
+        # Return empty DataFrame instead of None
+        return pd.DataFrame({"Error": [f"Parsing failed: {str(e)[:100]}"]})
+    
+    # CRITICAL: Ensure we never return None
+    if df is None or (hasattr(df, 'empty') and df.empty):
+        return pd.DataFrame({"Info": ["File parsed but no structured data found"]})
+    
+    return df
 
 def parse_csv(file):
     """Parse CSV file"""
@@ -87,9 +95,9 @@ def parse_pdf(file):
     Parse PDF file and extract tables
     
     Returns:
-        DataFrame or list of DataFrames if multiple tables found
+        DataFrame (always returns a DataFrame, even if empty)
     """
-    st.info("📄 Extracting data from PDF...")
+    st.info("Extracting data from PDF...")
     
     tables = []
     
@@ -105,13 +113,17 @@ def parse_pdf(file):
                     for table in page_tables:
                         if table and len(table) > 1:
                             # Convert to DataFrame
-                            df = pd.DataFrame(table[1:], columns=table[0])
+                            # Handle empty headers
+                            headers = table[0] if table[0] else [f"Column_{i}" for i in range(len(table[0]))]
+                            df = pd.DataFrame(table[1:], columns=headers)
                             df = df.dropna(how='all', axis=1)  # Remove empty columns
                             df = df.dropna(how='all', axis=0)  # Remove empty rows
                             
                             if len(df) > 0:
+                                # Clean column names immediately
+                                df.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df.columns)]
                                 tables.append(df)
-                                st.success(f"✅ Found table on page {page_num}")
+                                st.success(f"Found table on page {page_num}")
         
         if tables:
             if len(tables) == 1:
@@ -136,7 +148,11 @@ def parse_pdf(file):
         tables = tabula.read_pdf(file, pages='all', multiple_tables=True)
         
         if tables:
-            st.success(f"✅ Found {len(tables)} table(s) using Tabula")
+            st.success(f"Found {len(tables)} table(s) using Tabula")
+            
+            # Clean column names for all tables
+            for i, df in enumerate(tables):
+                df.columns = [f'Column_{j}' if pd.isna(col) else str(col) for j, col in enumerate(df.columns)]
             
             if len(tables) == 1:
                 return tables[0]
@@ -166,21 +182,31 @@ def parse_pdf(file):
             df = parse_text_to_dataframe(all_text)
             
             if df is not None and len(df) > 0:
-                st.success("✅ Successfully parsed text content")
+                st.success("Successfully parsed text content")
+                # Clean column names
+                df.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df.columns)]
                 return df
     
     except Exception as e:
-        st.error(f"Text extraction failed: {str(e)}")
+        st.warning(f"Text extraction failed: {str(e)}")
     
-    st.error("❌ Could not extract structured data from PDF")
-    st.info("""
-    **Tips for better PDF parsing:**
-    - Ensure PDF contains actual tables (not images)
-    - Use PDFs with clear table borders
-    - Consider using OCR for scanned documents
-    """)
+    # CRITICAL: ALWAYS return a DataFrame, never None
+    st.warning("Could not extract structured data from PDF. Creating empty DataFrame.")
     
-    return None
+    # Create empty DataFrame with fallback column
+    empty_df = pd.DataFrame({"Empty": ["No data extracted from PDF"]})
+    
+    # Show troubleshooting tips
+    with st.expander("Troubleshooting PDF extraction"):
+        st.markdown("""
+        **Tips for better PDF parsing:**
+        - Ensure PDF contains actual tables (not images)
+        - Use PDFs with clear table borders
+        - Consider using OCR for scanned documents
+        - Try converting PDF to CSV/Excel first for better results
+        """)
+    
+    return empty_df
 
 def parse_docx(file):
     """

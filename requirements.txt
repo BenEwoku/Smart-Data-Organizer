@@ -12,6 +12,19 @@ lxml>=4.9.0
 
 # Excel support
 openpyxl>=3.1.0
+xlrd>=2.0.1
+
+# Google Sheets integration
+gspread>=5.12.0
+google-auth>=2.23.0
+google-auth-oauthlib>=1.0.0
+
+# PDF support
+PyPDF2>=3.0.0
+pdfplumber>=0.10.0
+
+# Word document support
+python-docx>=1.1.0
 
 # Data visualization (optional)
 plotly>=5.18.0
@@ -19,11 +32,6 @@ plotly>=5.18.0
 # Development tools
 black>=23.0.0
 pytest>=7.4.0
-
-# Add these:
-gspread>=5.0.0
-google-auth>=2.0.0
-google-auth-oauthlib>=1.0.0
 
 # Phase 2: Payment processing (optional - for production)
 # stripe>=5.5.0

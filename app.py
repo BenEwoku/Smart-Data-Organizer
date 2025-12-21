@@ -400,31 +400,54 @@ with tab1:
     
     elif input_method == "Upload File":
         st.markdown("**Upload your data file**")
-        st.caption("Supported formats: CSV, Excel (.xlsx, .xls), TXT")
+        st.caption("Supported formats: CSV, Excel (.xlsx, .xls), TXT, PDF, DOCX")
         
         uploaded_file = st.file_uploader(
             "Choose file:",
-            type=['csv', 'xlsx', 'xls', 'txt'],
+            type=['csv', 'xlsx', 'xls', 'txt', 'pdf', 'docx', 'doc'],
             label_visibility="collapsed"
         )
         
         if uploaded_file:
-            with st.spinner("Reading file..."):
+            file_ext = uploaded_file.name.split('.')[-1].lower()
+            
+            st.info(f"📁 Uploaded: {uploaded_file.name} ({file_ext.upper()}, {uploaded_file.size / 1024:.1f} KB)")
+            
+            with st.spinner(f"Reading {file_ext.upper()} file..."):
                 try:
-                    import pandas as pd
-                    if uploaded_file.name.endswith('.csv') or uploaded_file.name.endswith('.txt'):
-                        df_raw = pd.read_csv(uploaded_file)
-                    elif uploaded_file.name.endswith(('.xlsx', '.xls')):
-                        df_raw = pd.read_excel(uploaded_file)
+                    # Import the new file parser
+                    from utils.file_parser import parse_uploaded_file
                     
-                    if df_raw is not None:
+                    df_raw = parse_uploaded_file(uploaded_file)
+                    
+                    if df_raw is not None and len(df_raw) > 0:
                         st.session_state.df = df_raw
                         # Increment conversion count
                         increment_conversion_count(st.session_state.user_email)
-                        st.success("File uploaded successfully!")
+                        
+                        # Show preview
+                        with st.expander("Data Preview", expanded=True):
+                            st.dataframe(df_raw.head(10), use_container_width=True)
+                            st.caption(f"**Total:** {len(df_raw):,} rows × {len(df_raw.columns)} columns")
+                        
+                        st.success(f"✅ {file_ext.upper()} file processed successfully!")
                         st.rerun()
+                    else:
+                        st.error(f"Could not extract data from {file_ext.upper()} file")
+                        st.info("""
+                        **Troubleshooting tips:**
+                        - For PDFs: Ensure the document contains actual tables (not scanned images)
+                        - For Word docs: Data should be in table format
+                        - For Excel: Check if file is password-protected
+                        """)
+                        
                 except Exception as e:
                     st.error(f"Error reading file: {str(e)}")
+                    
+                    # Show detailed error for debugging
+                    with st.expander("🔍 Technical Details"):
+                        st.code(str(e))
+                        st.caption("If this error persists, try saving your data in CSV format.")
     
     # Show examples
     with st.expander("View Examples & Tips"):

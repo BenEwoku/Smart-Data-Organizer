@@ -251,7 +251,7 @@ with st.sidebar:
     )
 
 # Main content area
-tab1, tab2, tab3, tab4 = st.tabs(["Input", "Detect", "Organize", "Export", "Impute"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Input", "Detect", "Organize", "Export", "Impute"])
 
 # TAB 1: INPUT
 with tab1:

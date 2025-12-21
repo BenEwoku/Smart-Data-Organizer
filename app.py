@@ -566,7 +566,6 @@ user = get_current_user()
 # Sidebar with user info
 show_user_sidebar()
 
-# Navigation
 # Navigation with admin protection
 st.sidebar.markdown("---")
 st.sidebar.header("Navigation")

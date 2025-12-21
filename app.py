@@ -31,13 +31,15 @@ st.set_page_config(
 # Custom CSS for larger fonts and left alignment
 st.markdown("""
     <style>
-    /* Main header styling - larger and left-aligned */
+    /* Main header styling - MUCH larger and left-aligned */
     .main-header {
-        font-size: 3rem;
-        font-weight: bold;
+        font-size: 4.5rem;  /* Increased from 3rem */
+        font-weight: 900;   /* Increased from bold */
         color: #1f77b4;
         text-align: left;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
+        line-height: 1.1;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1);
     }
     
     /* Subheader styling */
@@ -48,6 +50,62 @@ st.markdown("""
         text-align: left;
         margin-top: 1.5rem;
         margin-bottom: 1rem;
+    }
+    
+    /* LIGHT COFFEE BROWN TABS */
+    .stTabs [data-baseweb="tab-list"] {
+        font-size: 1.3rem !important;  /* Slightly larger */
+        font-weight: 600 !important;
+        background-color: #f5f1eb !important;  /* Light coffee cream base */
+        padding: 8px 8px 0 8px !important;
+        border-radius: 12px 12px 0 0 !important;
+        border-bottom: 3px solid #d7ccc8 !important;  /* Light brown border */
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background-color: #efe6dd !important;  /* Light coffee brown */
+        color: #5d4037 !important;  /* Dark brown text */
+        padding: 15px 25px !important;
+        margin: 0 2px !important;
+        border-radius: 8px 8px 0 0 !important;
+        border: 2px solid transparent !important;
+        border-bottom: none !important;
+        transition: all 0.2s ease !important;
+        font-size: 1.2rem !important;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #e6d5c3 !important;  /* Slightly darker coffee */
+        color: #4e342e !important;
+        transform: translateY(-2px);
+        border: 2px solid #d7ccc8 !important;
+        border-bottom: none !important;
+    }
+    
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background-color: #d7ccc8 !important;  /* Active tab - medium coffee brown */
+        color: #3e2723 !important;  /* Very dark brown */
+        border: 2px solid #bcaaa4 !important;
+        border-bottom: 2px solid white !important;
+        position: relative;
+        z-index: 100;
+        font-weight: 700 !important;
+        box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.05);
+    }
+    
+    /* Remove the default blue indicator */
+    .stTabs [data-baseweb="tab"][aria-selected="true"]::after {
+        display: none !important;
+    }
+    
+    /* Tab content area to match */
+    .stTabs [data-baseweb="tab-panel"] {
+        background-color: white !important;
+        border: 2px solid #d7ccc8 !important;
+        border-top: none !important;
+        border-radius: 0 0 12px 12px !important;
+        padding: 25px !important;
+        margin-top: -2px !important;
     }
     
     /* Regular text */
@@ -70,12 +128,6 @@ st.markdown("""
     /* Button text */
     .stButton > button {
         font-size: 1.1rem !important;
-        font-weight: 600 !important;
-    }
-    
-    /* Tab text */
-    .stTabs [data-baseweb="tab-list"] {
-        font-size: 1.2rem !important;
         font-weight: 600 !important;
     }
     
@@ -834,7 +886,7 @@ with tab2:
                             if len(missing_cols) > 5:
                                 st.caption(f"... and {len(missing_cols) - 5} more columns")
             else:
-                if st.button("✅ Check Missing Values", use_container_width=True, disabled=False):
+                if st.button("Check Missing Values", use_container_width=True, disabled=False):
                     st.success("Great! No missing values found in your data.")
 
         with col2:
@@ -1176,7 +1228,7 @@ with tab5:
                             st.rerun()
                         
             # Option 3: Delete rows/columns with granular control
-            with st.expander("🗑️ Delete Missing Values (Column-Specific)", expanded=False):
+            with st.expander("Delete Missing Values (Column-Specific)", expanded=False):
                 st.markdown("**Choose how to handle missing values for each column:**")
                 
                 # Get columns with missing values
@@ -1263,7 +1315,7 @@ with tab5:
                             st.markdown("---")
                         
                         # Apply all actions button
-                        if st.button("🚀 Apply All Selected Actions", type="primary", use_container_width=True):
+                        if st.button("Apply All Selected Actions", type="primary", use_container_width=True):
                             df_processed = df.copy()
                             results = []
                             

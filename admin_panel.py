@@ -272,12 +272,21 @@ def show_user_management(df_users):
                     ["free", "pro", "analyst", "business"],
                     key=f"tier_{selected_email}"
                 )
-                
+
+                # In show_user_management() function, where you update tier:
                 if st.button("Update Tier", key=f"update_tier_{selected_email}"):
                     from utils.auth import update_user
+                    
+                    # Clear cache first
+                    import streamlit as st
+                    st.cache_data.clear()
+                    
                     if update_user(selected_email, {'tier': new_tier}):
                         st.success(f"Updated {selected_email} to {new_tier} tier")
-                        st.rerun()
+                        
+                        # Force immediate refresh
+                        st.balloons()
+                        st.rerun()  # This forces the page to reload
             
             with col3:
                 st.write("Conversions:")

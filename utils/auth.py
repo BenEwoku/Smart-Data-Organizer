@@ -375,15 +375,29 @@ def update_user(email, updates):
     success = gsheets_db.update_user_in_sheet(email, updates)
     
     if success:
-        # Also update session state
-        users = load_users()
-        if email in users:
-            users[email].update(updates)
-            st.session_state.users_db = users
-            
-            # Update current session if it's the logged-in user
-            if st.session_state.get('user_email') == email:
-                st.session_state.user_data.update(updates)
+        # Clear ALL caches
+        import streamlit as st
+        
+        # Clear Streamlit caches
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        
+        # Clear your custom caches
+        if 'user_cache' in st.session_state:
+            if email in st.session_state.user_cache:
+                del st.session_state.user_cache[email]
+        
+        # Clear the user cache in gsheets_db too
+        if hasattr(gsheets_db, 'user_cache'):
+            if email in gsheets_db.user_cache:
+                del gsheets_db.user_cache[email]
+        
+        # Update current session if it's the logged-in user
+        if st.session_state.get('user_email') == email:
+            # Force reload from Google Sheets
+            user = gsheets_db.get_user_from_sheet(email)
+            if user:
+                st.session_state.user_data = user
         
         return True
     

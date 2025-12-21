@@ -566,6 +566,24 @@ user = get_current_user()
 # Sidebar with user info
 show_user_sidebar()
 
+# Debug tier info
+with st.sidebar.expander("🔍 Tier Status", expanded=False):
+    st.write(f"**Tier:** {user['tier'].upper()}")
+    st.write(f"**Conversions Used:** {user.get('conversions_used', 0)}")
+    
+    from utils.auth import get_conversion_limit, get_conversions_remaining
+    limit = get_conversion_limit(user['tier'])
+    remaining = get_conversions_remaining(user)
+    
+    st.write(f"**Limit:** {limit if limit != float('inf') else 'Unlimited'}")
+    st.write(f"**Remaining:** {remaining}")
+    
+    # Check if it's recognizing Pro tier correctly
+    if user['tier'] == 'pro':
+        st.success("✓ Pro tier recognized")
+    else:
+        st.warning(f"Current tier: {user['tier']}")
+
 # Navigation with admin protection
 st.sidebar.markdown("---")
 st.sidebar.header("Navigation")

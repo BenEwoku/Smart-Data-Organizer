@@ -566,8 +566,15 @@ user = get_current_user()
 # Sidebar with user info
 show_user_sidebar()
 
+# === ADD USER REFRESH BUTTON HERE ===
+if st.sidebar.button("Refresh My Account Data", use_container_width=True, type="secondary"):
+    from utils.auth import refresh_current_user_session
+    refresh_current_user_session()
+    st.sidebar.success("Account data refreshed!")
+    st.rerun()
+
 # Debug tier info
-with st.sidebar.expander("🔍 Tier Status", expanded=False):
+with st.sidebar.expander("Tier Status", expanded=False):
     st.write(f"**Tier:** {user['tier'].upper()}")
     st.write(f"**Conversions Used:** {user.get('conversions_used', 0)}")
     

@@ -143,26 +143,16 @@ def verify_login(email, password):
     return False, "Email not found"
 
 def login_user(email):
-    """Set user session as logged in"""
-    # Try to get user from Google Sheets first
+    """Set user session as logged in - ALWAYS get fresh data"""
+    # ALWAYS get from Google Sheets, never from cache
     user = gsheets_db.get_user_from_sheet(email)
     
     if user:
-        # User exists in Google Sheets
         st.session_state.logged_in = True
         st.session_state.user_email = email
         st.session_state.user_data = user
         st.session_state.is_admin = is_admin(email)
         return True
-    else:
-        # Fallback to session state
-        users = load_users()
-        if email in users:
-            st.session_state.logged_in = True
-            st.session_state.user_email = email
-            st.session_state.user_data = users[email]
-            st.session_state.is_admin = is_admin(email)
-            return True
     
     return False
 
@@ -370,38 +360,61 @@ def update_user_tier(email, new_tier):
     return False
 
 def update_user(email, updates):
-    """Update user data (admin only) - Now updates Google Sheets"""
+    """Update user data (admin only) - Proper cache handling"""
     # Update in Google Sheets
     success = gsheets_db.update_user_in_sheet(email, updates)
     
     if success:
-        # Clear ALL caches
         import streamlit as st
         
-        # Clear Streamlit caches
-        st.cache_data.clear()
-        st.cache_resource.clear()
+        # Clear THIS user's cache specifically
+        clear_user_cache(email)
         
-        # Clear your custom caches
-        if 'user_cache' in st.session_state:
-            if email in st.session_state.user_cache:
-                del st.session_state.user_cache[email]
-        
-        # Clear the user cache in gsheets_db too
-        if hasattr(gsheets_db, 'user_cache'):
-            if email in gsheets_db.user_cache:
-                del gsheets_db.user_cache[email]
-        
-        # Update current session if it's the logged-in user
+        # If this is the current logged-in user, refresh session
         if st.session_state.get('user_email') == email:
-            # Force reload from Google Sheets
-            user = gsheets_db.get_user_from_sheet(email)
-            if user:
-                st.session_state.user_data = user
+            refresh_current_user_session()
         
         return True
+    return False
+
+def refresh_current_user_session():
+    """Refresh current user's session data from database"""
+    import streamlit as st
+    from utils.auth import gsheets_db, is_admin
+    
+    email = st.session_state.get('user_email')
+    if email:
+        # Get fresh data from Google Sheets
+        user = gsheets_db.get_user_from_sheet(email)
+        
+        if user:
+            # Update session state
+            st.session_state.user_data = user
+            
+            # Update is_admin flag
+            st.session_state.is_admin = is_admin(email)
+            
+            return True
     
     return False
+
+def clear_user_cache(email):
+    """Clear cache for a specific user - call this when user data changes"""
+    import streamlit as st
+    
+    # Clear from session cache
+    if 'user_cache' in st.session_state and email in st.session_state.user_cache:
+        del st.session_state.user_cache[email]
+    
+    # Clear from gsheets_db cache if exists
+    try:
+        if hasattr(gsheets_db, 'user_cache') and email in gsheets_db.user_cache:
+            del gsheets_db.user_cache[email]
+    except:
+        pass
+    
+    # Invalidate cached queries that include this user
+    st.cache_data.clear()
 
 def delete_user(email):
     """Delete user (admin only) - Now deletes from Google Sheets"""

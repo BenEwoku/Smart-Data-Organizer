@@ -644,6 +644,52 @@ def show_development_tools():
             
             st.success("App state reset!")
             st.rerun()
+
+    # === ADD CACHE MANAGEMENT HERE ===
+    st.markdown("---")
+    st.markdown("### Cache Management")
+    
+    from utils.auth import get_all_users
+    
+    cache_col1, cache_col2 = st.columns(2)
+    
+    with cache_col1:
+        if st.button("Clear ALL User Caches", use_container_width=True, type="primary"):
+            import streamlit as st
+            # Clear all caches
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            
+            # Clear custom caches
+            if 'user_cache' in st.session_state:
+                st.session_state.user_cache = {}
+            
+            st.success("All user caches cleared! Users will see fresh data on next action.")
+            st.balloons()
+            st.rerun()
+    
+    with cache_col2:
+        # Get all users for the dropdown
+        all_users = get_all_users()
+        user_emails = [u['email'] for u in all_users] if all_users else []
+        
+        if user_emails:
+            user_to_refresh = st.selectbox(
+                "Select user to refresh:",
+                user_emails,
+                key="cache_user_select"
+            )
+            
+            if st.button("Refresh This User", use_container_width=True):
+                from utils.auth import clear_user_cache
+                success = clear_user_cache(user_to_refresh)
+                if success:
+                    st.success(f"Cache cleared for {user_to_refresh}")
+                else:
+                    st.error(f"Failed to clear cache for {user_to_refresh}")
+        else:
+            st.info("No users found in database")
+    # === END CACHE MANAGEMENT ===
     
     # Database operations
     st.markdown("---")

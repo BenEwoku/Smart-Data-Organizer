@@ -234,8 +234,18 @@ def get_user_from_sheet(email):
     
     return None
 
+# In gsheets_db.py, add this function
+def invalidate_user_cache(email):
+    """Invalidate cache for a specific user"""
+    if 'user_cache' in st.session_state and email in st.session_state.user_cache:
+        del st.session_state.user_cache[email]
+    
+    # Also clear the cached users list
+    st.cache_data.clear()
+
+# Update update_user_in_sheet to call it
 def update_user_in_sheet(email, updates):
-    """Update user data in Google Sheet - SUPPORTS is_admin"""
+    """Update user data in Google Sheet - with cache invalidation"""
     if not sheet_exists():
         return False
     
@@ -244,32 +254,26 @@ def update_user_in_sheet(email, updates):
         return False
     
     try:
-        time.sleep(0.2)  # Rate limiting
+        time.sleep(0.2)
         records = worksheet.get_all_records()
         
         for i, record in enumerate(records, start=2):
             if record['email'] == email:
                 for key, value in updates.items():
-                    if key in record or key == 'is_admin':  # Allow is_admin updates
-                        # Find column index
+                    if key in record or key == 'is_admin':
                         headers = list(record.keys())
                         if key in headers:
                             col_idx = headers.index(key) + 1
                         elif key == 'is_admin':
-                            col_idx = 9  # is_admin is column I (9th column)
+                            col_idx = 9
                         else:
                             continue
                         
                         worksheet.update_cell(i, col_idx, value)
-                        time.sleep(0.1)  # Rate limiting between updates
+                        time.sleep(0.1)
                 
-                # Clear user cache
-                if 'user_cache' in st.session_state and email in st.session_state.user_cache:
-                    del st.session_state.user_cache[email]
-                
-                # Clear all users cache when admin status changes
-                if 'is_admin' in updates:
-                    st.cache_data.clear()
+                # INVALIDATE CACHE FOR THIS USER
+                invalidate_user_cache(email)
                 
                 return True
     except Exception as e:

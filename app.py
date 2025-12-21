@@ -76,7 +76,7 @@ st.sidebar.header("Navigation")
 # Show admin option if user is admin
 if is_admin(st.session_state.user_email):
     page_options = ["Home", "Admin Panel", "Pricing", "Billing"]
-    st.sidebar.markdown('<div class="admin-badge">ADMIN</div>', unsafe_allow_html=True)
+    st.sidebar.markdown('<div style="background-color: #ff4b4b; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;">ADMIN</div>', unsafe_allow_html=True)
 else:
     page_options = ["Home", "Pricing", "Billing"]
 

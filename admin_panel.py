@@ -11,11 +11,11 @@ import json
 def show_admin_panel():
     """Main admin panel interface"""
     
-    st.markdown("# ⚙️ Admin Panel")
+    st.markdown("# Admin Panel")
     st.markdown("---")
     
     # Admin stats
-    from utils.auth import get_all_users, load_users
+    from utils.auth import get_all_users
     users = get_all_users()
     df_users = pd.DataFrame(users)
     
@@ -42,11 +42,11 @@ def show_admin_panel():
     
     # Main admin tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "👥 User Management", 
-        "📊 Analytics", 
-        "⚡ Quick Actions",
-        "🛠️ System Settings",
-        "🎯 Development Tools"
+        "User Management", 
+        "Analytics", 
+        "Quick Actions",
+        "System Settings",
+        "Development Tools"
     ])
     
     with tab1:
@@ -125,13 +125,15 @@ def show_user_management(df_users):
     )
     
     if selected_email:
-        user_data = next((u for u in get_all_users() if u['email'] == selected_email), None)
+        from utils.auth import get_all_users
+        all_users = get_all_users()
+        user_data = next((u for u in all_users if u['email'] == selected_email), None)
         
         if user_data:
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                st.write("**Current Tier:**")
+                st.write("Current Tier:")
                 st.info(user_data['tier'].upper())
             
             with col2:
@@ -148,7 +150,7 @@ def show_user_management(df_users):
                         st.rerun()
             
             with col3:
-                st.write("**Conversions:**")
+                st.write("Conversions:")
                 st.metric("Used", user_data['conversions_used'])
                 
                 if st.button("Reset Count", key=f"reset_{selected_email}"):
@@ -158,7 +160,7 @@ def show_user_management(df_users):
                         st.rerun()
             
             with col4:
-                if st.button("🗑️ Delete User", type="secondary", key=f"delete_{selected_email}"):
+                if st.button("Delete User", type="secondary", key=f"delete_{selected_email}"):
                     from utils.auth import delete_user
                     if delete_user(selected_email):
                         st.success(f"Deleted user {selected_email}")
@@ -203,7 +205,7 @@ def show_analytics_dashboard(df_users):
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("📥 Export User Data", use_container_width=True):
+        if st.button("Export User Data", use_container_width=True):
             csv = df.to_csv(index=False)
             st.download_button(
                 label="Download CSV",
@@ -213,7 +215,7 @@ def show_analytics_dashboard(df_users):
             )
     
     with col2:
-        if st.button("📊 Generate Report", use_container_width=True):
+        if st.button("Generate Report", use_container_width=True):
             report = generate_admin_report(df_users)
             st.download_button(
                 label="Download Report",
@@ -275,9 +277,9 @@ def show_quick_actions():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("### 🎯 Development Actions")
+        st.markdown("### Development Actions")
         
-        if st.button("🧪 Add Test Users", use_container_width=True, type="primary"):
+        if st.button("Add Test Users", use_container_width=True, type="primary"):
             from utils.auth import load_users, save_user
             import random
             
@@ -292,7 +294,7 @@ def show_quick_actions():
             st.success("Added 5 test users!")
             st.rerun()
         
-        if st.button("📊 Reset All Stats", use_container_width=True):
+        if st.button("Reset All Stats", use_container_width=True):
             from utils.auth import load_users, update_user
             
             users = load_users()
@@ -303,7 +305,7 @@ def show_quick_actions():
             st.success("Reset all user conversion counts!")
             st.rerun()
         
-        if st.button("🧹 Clear All Sessions", use_container_width=True):
+        if st.button("Clear All Sessions", use_container_width=True):
             st.warning("This will log out all users except you!")
             if st.checkbox("Confirm clear all sessions"):
                 # Save current user data
@@ -326,9 +328,9 @@ def show_quick_actions():
                 st.rerun()
     
     with col2:
-        st.markdown("### ⚙️ System Actions")
+        st.markdown("### System Actions")
         
-        if st.button("🔄 System Health Check", use_container_width=True):
+        if st.button("System Health Check", use_container_width=True):
             from utils.auth import get_all_users
             
             users = get_all_users()
@@ -336,25 +338,24 @@ def show_quick_actions():
             
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.success("✅ Database: OK")
+                st.success("Database: OK")
             with col2:
-                st.success("✅ Auth System: OK")
+                st.success("Auth System: OK")
             with col3:
-                st.success("✅ Session: OK")
+                st.success("Session: OK")
             
             st.info(f"Total Users: {len(users)}")
             st.info(f"Total Conversions: {conversions}")
             st.info(f"Admin Session: Active")
         
-        if st.button("📋 View Raw Data", use_container_width=True):
+        if st.button("View Raw Data", use_container_width=True):
             from utils.auth import load_users
             
             users = load_users()
             st.json(users, expanded=False)
         
-        if st.button("🔐 Reset Admin Password", use_container_width=True):
+        if st.button("Reset Admin Password", use_container_width=True):
             st.info("Admin password reset (development only)")
-            # This would reset admin password in production
 
 def show_system_settings():
     """System configuration"""
@@ -407,7 +408,7 @@ def show_system_settings():
             enable_admin_panel = st.toggle("Enable admin panel", value=True)
         
         # Save settings
-        if st.form_submit_button("💾 Save Settings", type="primary"):
+        if st.form_submit_button("Save Settings", type="primary"):
             # In production, save to database or config file
             settings = {
                 'free_conversions': free_conversions,
@@ -457,7 +458,7 @@ def show_development_tools():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("### 🧪 Testing Tools")
+        st.markdown("### Testing Tools")
         
         # Test data generation
         if st.button("Generate Test Dataset", use_container_width=True):
@@ -485,7 +486,7 @@ def show_development_tools():
             st.success("All app data cleared!")
     
     with col2:
-        st.markdown("### 🔍 Debug Tools")
+        st.markdown("### Debug Tools")
         
         # View session state
         if st.button("View Session State", use_container_width=True):
@@ -507,7 +508,7 @@ def show_development_tools():
     
     # Database operations
     st.markdown("---")
-    st.markdown("### 🗄️ Database Operations")
+    st.markdown("### Database Operations")
     
     col1, col2 = st.columns(2)
     
@@ -540,12 +541,12 @@ def show_development_tools():
         import sys
         import platform
         
-        st.write("**Python Version:**", sys.version.split()[0])
-        st.write("**Platform:**", platform.platform())
-        st.write("**Streamlit Version:**", st.__version__)
+        st.write("Python Version:", sys.version.split()[0])
+        st.write("Platform:", platform.platform())
+        st.write("Streamlit Version:", st.__version__)
         
         try:
             import pandas as pd
-            st.write("**Pandas Version:**", pd.__version__)
+            st.write("Pandas Version:", pd.__version__)
         except:
             pass

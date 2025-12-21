@@ -799,7 +799,7 @@ with tab2:
             missing_pct = validation_result.get('missing_percentage', 0) if 'validation_result' in locals() else 0
             
             if missing_count > 0:
-                button_label = f"🛠️ Fix Missing Values ({missing_count:,} found)"
+                button_label = f"Fix Missing Values ({missing_count:,} found)"
                 
                 if st.button(button_label, use_container_width=True, type="primary"):
                     st.success(f"Found {missing_count:,} missing values ({missing_pct:.1f}%)")
@@ -812,13 +812,13 @@ with tab2:
                     • Preview changes before applying
                     • Delete rows/columns with missing data
                     
-                    **Click on "Impute" in the tab bar above** ⬆️
+                    **Click on "Impute" in the tab bar above**
                     """)
                     
                     # Visual indicator
                     st.markdown("""
                     <div style="background-color: #e6f3ff; padding: 10px; border-radius: 5px; border-left: 5px solid #1f77b4; margin: 10px 0;">
-                    <strong>📍 Look for this tab:</strong> <span style="background-color: #1f77b4; color: white; padding: 2px 8px; border-radius: 3px; font-weight: bold;">Impute</span>
+                    <strong>Look for this tab:</strong> <span style="background-color: #1f77b4; color: white; padding: 2px 8px; border-radius: 3px; font-weight: bold;">Impute</span>
                     </div>
                     """, unsafe_allow_html=True)
                     
@@ -1021,17 +1021,17 @@ with tab5:
             st.metric("Columns Affected", cols_with_missing)
         with col4:
             if missing_stats['total_missing'] == 0:
-                st.metric("Status", "✅ Clean", delta="No missing values")
+                st.metric("Status", "Clean", delta="No missing values")
             elif missing_stats['overall_missing_percent'] < 5:
-                st.metric("Status", "⚠️ Minor", delta=f"{missing_stats['overall_missing_percent']:.1f}%")
+                st.metric("Status", "Minor", delta=f"{missing_stats['overall_missing_percent']:.1f}%")
             else:
-                st.metric("Status", "🔴 Needs Fix", delta=f"{missing_stats['overall_missing_percent']:.1f}%")
+                st.metric("Status", "Needs Fix", delta=f"{missing_stats['overall_missing_percent']:.1f}%")
         
         if missing_stats['total_missing'] > 0:
             st.markdown("---")
             
             # Option 1: Quick Fix (Auto-impute all)
-            with st.expander("⚡ Quick Fix (Auto-impute all columns)", expanded=True):
+            with st.expander("Quick Fix (Auto-impute all columns)", expanded=True):
                 st.markdown("**Automatically apply recommended imputation methods:**")
                 
                 # Show suggested methods
@@ -1070,7 +1070,7 @@ with tab5:
                             st.rerun()
             
             # Option 2: Column-by-column control
-            with st.expander("🔧 Advanced Column-by-Column Control", expanded=False):
+            with st.expander("Advanced Column-by-Column Control", expanded=False):
                 st.markdown("**Select specific imputation methods for each column:**")
                 
                 columns_with_missing = [col for col, count in missing_stats['missing_by_column'].items() 

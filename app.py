@@ -40,7 +40,21 @@ def parse_mbox_file(mbox_file):
     
     try:
         # Read MBOX file
-        mbox = mailbox.mbox(mbox_file)
+        # Handle both file path and file object
+        if hasattr(mbox_file, 'read'):
+            # It's a file object (uploaded file)
+            # Save to temp file first
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.mbox') as tmp_file:
+                tmp_file.write(mbox_file.read())
+                tmp_path = tmp_file.name
+            
+            mbox = mailbox.mbox(tmp_path)
+        else:
+            # It's a file path
+            mbox = mailbox.mbox(mbox_file)
+        
+        st.info(f"📨 Found {len(mbox)} emails to process...")
         
         for i, message in enumerate(mbox):
             try:
@@ -52,11 +66,14 @@ def parse_mbox_file(mbox_file):
                 
                 # Decode subject if encoded
                 if subject:
-                    decoded_subject = decode_header(subject)[0]
-                    if decoded_subject[1]:
-                        subject = decoded_subject[0].decode(decoded_subject[1], errors='ignore')
-                    else:
-                        subject = str(decoded_subject[0])
+                    try:
+                        decoded_subject = decode_header(subject)[0]
+                        if decoded_subject[1]:
+                            subject = decoded_subject[0].decode(decoded_subject[1], errors='ignore')
+                        else:
+                            subject = str(decoded_subject[0])
+                    except:
+                        subject = str(subject)
                 
                 # Extract email addresses and domains
                 from_email, from_domain = extract_email_and_domain(from_header)
@@ -75,8 +92,7 @@ def parse_mbox_file(mbox_file):
                 # Calculate thread ID (based on subject)
                 thread_id = generate_thread_id(subject)
                 
-                # Initialize response time and priority score
-                response_time = None
+                # Calculate priority score
                 priority_score = calculate_priority_score(subject, from_domain, body_preview)
                 
                 emails.append({
@@ -89,19 +105,34 @@ def parse_mbox_file(mbox_file):
                     'Subject': subject[:200] if subject else '',  # Limit subject length
                     'Body_Preview': body_preview[:300] if body_preview else '',  # Limit preview
                     'Thread_ID': thread_id,
-                    'Response_Time': response_time,  # Will be calculated later
+                    'Response_Time': None,  # Will be calculated later
                     'Priority_Score': priority_score
                 })
                 
+                # Progress update every 100 emails
+                if i % 100 == 0 and i > 0:
+                    st.caption(f"Processed {i} emails...")
+                
             except Exception as e:
                 # Skip problematic emails but continue processing
+                st.caption(f"Skipped email {i}: {str(e)[:50]}...")
                 continue
         
-        # Create DataFrame
+        # Clean up temp file if created
+        if 'tmp_path' in locals():
+            import os
+            os.unlink(tmp_path)
+        
+        # Create DataFrame - FIX: Avoid categorical dtype
         df = pd.DataFrame(emails)
         
+        # FIX: Convert any categorical columns to string
+        for col in df.columns:
+            if pd.api.types.is_categorical_dtype(df[col]):
+                df[col] = df[col].astype(str)
+        
         # Calculate response times after all emails are loaded
-        if len(df) > 0:
+        if len(df) > 0 and 'Thread_ID' in df.columns and 'Date' in df.columns:
             df = calculate_response_times(df)
         
         return df
@@ -110,21 +141,24 @@ def parse_mbox_file(mbox_file):
         raise Exception(f"Error parsing MBOX file: {str(e)}")
 
 def extract_email_and_domain(header):
-    """Extract email address and domain from header"""
+    """Extract email address and domain from header - always return strings"""
     if not header:
         return '', ''
+    
+    # Convert to string if not already
+    header = str(header)
     
     # Try to find email pattern
     email_pattern = r'[\w\.-]+@[\w\.-]+\.\w+'
     matches = re.findall(email_pattern, header)
     
     if matches:
-        email_addr = matches[0]
-        domain = email_addr.split('@')[-1] if '@' in email_addr else ''
+        email_addr = str(matches[0])
+        domain = str(email_addr.split('@')[-1]) if '@' in email_addr else ''
         return email_addr, domain
     else:
-        # If no email pattern, return the header as is
-        return header, ''
+        # If no email pattern, return the header as string
+        return str(header), ''
 
 def parse_email_date(date_str):
     """Parse email date string to datetime"""
@@ -229,9 +263,14 @@ def calculate_priority_score(subject, domain, body):
     return max(0, min(100, score))
 
 def calculate_response_times(df):
-    """Calculate response times between emails in same thread"""
+    """Calculate response times between emails in same thread - fixed version"""
     if df.empty or 'Thread_ID' not in df.columns or 'Date' not in df.columns:
         return df
+    
+    # Make sure Thread_ID is string to avoid categorical issues
+    df = df.copy()
+    if pd.api.types.is_categorical_dtype(df['Thread_ID']):
+        df['Thread_ID'] = df['Thread_ID'].astype(str)
     
     # Sort by thread and date
     df_sorted = df.sort_values(['Thread_ID', 'Date']).copy()
@@ -239,7 +278,7 @@ def calculate_response_times(df):
     response_times = []
     
     for thread_id in df_sorted['Thread_ID'].unique():
-        thread_emails = df_sorted[df_sorted['Thread_ID'] == thread_id]
+        thread_emails = df_sorted[df_sorted['Thread_ID'] == str(thread_id)]
         
         if len(thread_emails) > 1:
             dates = thread_emails['Date'].tolist()
@@ -253,11 +292,13 @@ def calculate_response_times(df):
         else:
             response_times.append(None)
     
-    # Add response times to DataFrame (simplified approach)
-    # In production, you'd want a more sophisticated matching
-    df_sorted['Response_Time'] = None  # Placeholder
+    # Add response times to DataFrame
+    # Simplified approach - just add placeholder
+    df['Response_Time_Hours'] = None
     
-    return df_sorted
+    # For better implementation, you'd need to match emails properly
+    # This is a simplified version
+    return df
 
 
 # Page configuration

@@ -41,8 +41,9 @@ def show_admin_panel():
     st.markdown("---")
     
     # Main admin tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "User Management", 
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "User Management",
+        "Admin Management", 
         "Analytics", 
         "Quick Actions",
         "System Settings",
@@ -51,17 +52,20 @@ def show_admin_panel():
     
     with tab1:
         show_user_management(df_users)
-    
+
     with tab2:
-        show_analytics_dashboard(users)
+        show_admin_management()  # NEW FUNCTION
     
     with tab3:
-        show_quick_actions()
+        show_analytics_dashboard(users)
     
     with tab4:
-        show_system_settings()
+        show_quick_actions()
     
     with tab5:
+        show_system_settings()
+    
+    with tab6:
         show_development_tools()
 
 def show_user_management(df_users):

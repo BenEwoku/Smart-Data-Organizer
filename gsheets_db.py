@@ -1,6 +1,7 @@
 """
 Google Sheets Database for Smart Data Organizer
 Persistent database solution with caching to avoid rate limits
+NOW WITH is_admin COLUMN SUPPORT
 """
 
 import gspread
@@ -50,7 +51,7 @@ def get_gsheets_client():
 
 @st.cache_resource(ttl=CACHE_DURATION)
 def get_or_create_sheet(sheet_name="SmartDataOrganizer_Users"):
-    """Get existing Google Sheet with caching"""
+    """Get existing Google Sheet with caching - NOW WITH is_admin COLUMN"""
     client = get_gsheets_client()
     if not client:
         return None
@@ -59,18 +60,29 @@ def get_or_create_sheet(sheet_name="SmartDataOrganizer_Users"):
         spreadsheet = client.open(sheet_name)
         worksheet = spreadsheet.sheet1
         
-        # Verify headers exist
+        # Verify headers exist - UPDATED TO INCLUDE is_admin
         headers = worksheet.row_values(1)
         expected_headers = ['email', 'password_hash', 'name', 'tier', 
-                          'conversions_used', 'created_at', 'last_login', 'last_reset']
+                          'conversions_used', 'created_at', 'last_login', 'last_reset', 'is_admin']
         
-        if not headers or headers != expected_headers:
-            worksheet.update('A1:H1', [expected_headers])
-            worksheet.format('A1:H1', {
+        if not headers or len(headers) < 9:
+            # Update headers to include is_admin
+            worksheet.update('A1:I1', [expected_headers])
+            worksheet.format('A1:I1', {
                 'backgroundColor': {'red': 0.2, 'green': 0.2, 'blue': 0.2},
                 'horizontalAlignment': 'CENTER',
                 'textFormat': {'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0}, 'bold': True}
             })
+            
+            # Add FALSE to existing rows for is_admin column if it doesn't exist
+            try:
+                records = worksheet.get_all_records()
+                if records and 'is_admin' not in records[0]:
+                    for i in range(2, len(records) + 2):
+                        worksheet.update_cell(i, 9, False)
+                        time.sleep(0.1)
+            except:
+                pass
         
         return worksheet
         
@@ -113,7 +125,7 @@ def sheet_exists():
 
 @st.cache_data(ttl=CACHE_DURATION)
 def get_all_users_cached():
-    """Get all users with caching"""
+    """Get all users with caching - NOW INCLUDES is_admin"""
     worksheet = get_or_create_sheet()
     if not worksheet:
         return []
@@ -130,7 +142,8 @@ def get_all_users_cached():
                 'tier': record['tier'],
                 'conversions_used': int(record['conversions_used']) if record['conversions_used'] else 0,
                 'created_at': record['created_at'],
-                'last_login': record['last_login']
+                'last_login': record['last_login'],
+                'is_admin': record.get('is_admin', False)  # NEW: Include is_admin
             })
         
         return users
@@ -138,8 +151,8 @@ def get_all_users_cached():
         print(f"Error getting all users: {str(e)}")
         return []
 
-def add_user_to_sheet(email, password_hash, name, tier='free'):
-    """Add user to Google Sheet"""
+def add_user_to_sheet(email, password_hash, name, tier='free', is_admin=False):
+    """Add user to Google Sheet - NOW INCLUDES is_admin"""
     worksheet = get_or_create_sheet()
     if not worksheet:
         return False
@@ -156,7 +169,8 @@ def add_user_to_sheet(email, password_hash, name, tier='free'):
             0,
             now,
             now,
-            now
+            now,
+            is_admin  # NEW: Add is_admin
         ])
         
         # Clear caches
@@ -170,7 +184,7 @@ def add_user_to_sheet(email, password_hash, name, tier='free'):
         return False
 
 def get_user_from_sheet(email):
-    """Get user from Google Sheet with caching"""
+    """Get user from Google Sheet with caching - NOW INCLUDES is_admin"""
     # Check session cache first
     if 'user_cache' not in st.session_state:
         st.session_state.user_cache = {}
@@ -206,7 +220,8 @@ def get_user_from_sheet(email):
                     'conversions_used': int(record['conversions_used']) if record['conversions_used'] else 0,
                     'created_at': record['created_at'],
                     'last_login': record['last_login'],
-                    'last_reset': record['last_reset']
+                    'last_reset': record['last_reset'],
+                    'is_admin': record.get('is_admin', False)  # NEW: Include is_admin
                 }
                 
                 # Cache the result
@@ -220,7 +235,7 @@ def get_user_from_sheet(email):
     return None
 
 def update_user_in_sheet(email, updates):
-    """Update user data in Google Sheet"""
+    """Update user data in Google Sheet - SUPPORTS is_admin"""
     if not sheet_exists():
         return False
     
@@ -235,14 +250,26 @@ def update_user_in_sheet(email, updates):
         for i, record in enumerate(records, start=2):
             if record['email'] == email:
                 for key, value in updates.items():
-                    if key in record:
-                        col_idx = list(record.keys()).index(key) + 1
+                    if key in record or key == 'is_admin':  # Allow is_admin updates
+                        # Find column index
+                        headers = list(record.keys())
+                        if key in headers:
+                            col_idx = headers.index(key) + 1
+                        elif key == 'is_admin':
+                            col_idx = 9  # is_admin is column I (9th column)
+                        else:
+                            continue
+                        
                         worksheet.update_cell(i, col_idx, value)
                         time.sleep(0.1)  # Rate limiting between updates
                 
                 # Clear user cache
                 if 'user_cache' in st.session_state and email in st.session_state.user_cache:
                     del st.session_state.user_cache[email]
+                
+                # Clear all users cache when admin status changes
+                if 'is_admin' in updates:
+                    st.cache_data.clear()
                 
                 return True
     except Exception as e:

@@ -183,9 +183,102 @@ def get_current_user():
         return st.session_state.get('user_data')
     return None
 
+def get_admin_list():
+    """Get list of all admin emails from Google Sheets"""
+    try:
+        all_users = gsheets_db.get_all_users_from_sheet()
+        admin_emails = [user['email'] for user in all_users if user.get('is_admin', False)]
+        
+        # Always include default admins
+        default_admins = ['admin@smartdata.com']
+        try:
+            default_admins.append(st.secrets["admin"]["admin_email"])
+        except:
+            pass
+        
+        all_admins = list(set(admin_emails + default_admins))
+        return all_admins
+    except:
+        return ['admin@smartdata.com', st.secrets.get("admin", {}).get("admin_email", 'admin@example.com')]
+
+# REPLACE the existing is_admin() function with this:
 def is_admin(user_email):
-    """Check if user is admin"""
-    return user_email in ADMIN_EMAILS
+    """Check if user is admin - Now checks both default list and user data"""
+    # Check default admin list
+    default_admins = ['admin@smartdata.com']
+    try:
+        default_admins.append(st.secrets["admin"]["admin_email"])
+    except:
+        pass
+    
+    if user_email in default_admins:
+        return True
+    
+    # Check user data for admin flag
+    user = gsheets_db.get_user_from_sheet(user_email)
+    if user and user.get('is_admin', False):
+        return True
+    
+    return False
+
+def promote_to_admin(email):
+    """Promote a user to admin status"""
+    if not is_logged_in():
+        return False, "Not logged in"
+    
+    current_user_email = st.session_state.get('user_email')
+    if not is_admin(current_user_email):
+        return False, "Only admins can promote users"
+    
+    user = gsheets_db.get_user_from_sheet(email)
+    if not user:
+        return False, "User not found"
+    
+    success = gsheets_db.update_user_in_sheet(email, {'is_admin': True})
+    
+    if success:
+        if st.session_state.get('user_email') == email:
+            st.session_state.is_admin = True
+            st.session_state.user_data['is_admin'] = True
+        
+        return True, f"{email} is now an admin"
+    else:
+        return False, "Failed to update user"
+
+def demote_from_admin(email):
+    """Remove admin status from a user"""
+    if not is_logged_in():
+        return False, "Not logged in"
+    
+    current_user_email = st.session_state.get('user_email')
+    if not is_admin(current_user_email):
+        return False, "Only admins can demote users"
+    
+    # Prevent demoting default admins
+    default_admins = ['admin@smartdata.com']
+    try:
+        default_admins.append(st.secrets["admin"]["admin_email"])
+    except:
+        pass
+    
+    if email in default_admins:
+        return False, "Cannot demote default admin accounts"
+    
+    # Prevent self-demotion if you're the only admin
+    all_admins = get_admin_list()
+    if email == current_user_email and len(all_admins) <= 1:
+        return False, "Cannot demote yourself - you're the only admin"
+    
+    success = gsheets_db.update_user_in_sheet(email, {'is_admin': False})
+    
+    if success:
+        if st.session_state.get('user_email') == email:
+            st.session_state.is_admin = False
+            st.session_state.user_data['is_admin'] = False
+        
+        return True, f"{email} is no longer an admin"
+    else:
+        return False, "Failed to update user"
 
 def get_all_users():
     """Get all users (admin only) - Now from Google Sheets"""

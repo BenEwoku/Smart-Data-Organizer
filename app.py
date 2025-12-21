@@ -567,31 +567,26 @@ user = get_current_user()
 show_user_sidebar()
 
 # Navigation
+# Navigation with admin protection
 st.sidebar.markdown("---")
 st.sidebar.header("Navigation")
 
-# Show admin option if user is admin
+# Show admin option ONLY if user is admin
 if is_admin(st.session_state.user_email):
     page_options = ["Home", "Admin Panel", "Pricing", "Billing"]
-    st.sidebar.markdown('<div style="background-color: #ff4b4b; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;">ADMIN</div>', unsafe_allow_html=True)
+    st.sidebar.markdown('<div style="background-color: #ff4b4b; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; display: inline-block; margin-bottom: 10px;">ADMIN</div>', unsafe_allow_html=True)
 else:
     page_options = ["Home", "Pricing", "Billing"]
 
-page = st.sidebar.radio(
-    "Go to:",
-    page_options,
-    label_visibility="collapsed"
-)
+page = st.sidebar.radio("Go to:", page_options, label_visibility="collapsed")
 
-# Handle different pages
-if page == "Admin Panel" and is_admin(st.session_state.user_email):
+# Handle pages with security check
+if page == "Admin Panel":
+    # SECURITY CHECK
+    if not is_admin(st.session_state.user_email):
+        st.error("Access Denied: Admin privileges required")
+        st.stop()
     show_admin_panel()
-    st.stop()
-elif page == "Pricing":
-    show_pricing_page()
-    st.stop()
-elif page == "Billing":
-    show_billing_portal()
     st.stop()
 
 # Main Home Page

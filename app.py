@@ -1891,10 +1891,8 @@ with tab3:
             st.info("No numeric columns for statistics")
     
     st.session_state.df_organized = df_organized
-    
-else:
-    # This should not happen with our safety checks, but keep as backup
-    st.info("Please detect data structure in the Detect tab first")
+
+# No else: block here - it should just end the with tab3: block
 
 # TAB 4: EXPORT
 with tab4:

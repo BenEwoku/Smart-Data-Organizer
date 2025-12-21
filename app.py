@@ -605,12 +605,28 @@ else:
 page = st.sidebar.radio("Go to:", page_options, label_visibility="collapsed")
 
 # Handle pages with security check
+# In app.py, replace the Admin Panel section with:
+
 if page == "Admin Panel":
     # SECURITY CHECK
     if not is_admin(st.session_state.user_email):
         st.error("Access Denied: Admin privileges required")
         st.stop()
-    show_admin_panel()
+    
+    # Use SIMPLE admin panel
+    try:
+        from admin_panel import show_admin_panel
+        show_admin_panel()
+    except Exception as e:
+        # Fallback to ultra-simple
+        st.markdown("# Admin Panel")
+        st.error(f"Error: {type(e).__name__}")
+        
+        if st.button("🔄 Clear Cache & Retry"):
+            import streamlit as st
+            st.cache_data.clear()
+            st.rerun()
+    
     st.stop()
 
 # Main Home Page

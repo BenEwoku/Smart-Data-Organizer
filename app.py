@@ -1794,8 +1794,6 @@ with tab2:
         st.info("Please input data in the Input tab first")
 
 # TAB 3: ORGANIZE
-# TAB 3: ORGANIZE
-# TAB 3: ORGANIZE
 with tab3:
     # SAFETY CHECK 1: Ensure data is loaded
     if st.session_state.df is None or st.session_state.df.empty:
@@ -1833,70 +1831,70 @@ with tab3:
     
     st.markdown('<h2 class="subheader">Step 3: Organize & Refine Data</h2>', unsafe_allow_html=True)
 
-        # ADDITIONAL SAFETY CHECK: Verify DataFrame is valid
-        if df.empty or len(df) == 0:
-            st.warning("DataFrame is empty. Please check your input data.")
-            st.stop()
+    # ADDITIONAL SAFETY CHECK: Verify DataFrame is valid
+    if df.empty or len(df) == 0:
+        st.warning("DataFrame is empty. Please check your input data.")
+        st.stop()
 
-        # SAFETY CHECK: Ensure columns exist before organizing
-        if structure == "Time Series":
-            if date_col and date_col in df.columns:
-                df_organized = organize_time_series(df, date_col)
-            else:
-                st.warning(f"Date column '{date_col}' not found in data. Using general organization.")
-                df_organized = df.copy()
-                
-        elif structure == "Panel Data":
-            if date_col and entity_col:
-                df_organized = organize_panel_data(df, date_col, entity_col)
-            else:
-                st.warning("Missing date or entity column for panel data. Using general organization.")
-                df_organized = df.copy()
-                
-        elif structure == "Cross-Sectional":
-            df_organized = organize_cross_sectional(df)
-            
-        elif structure == "Email Data":  # NEW: Email-specific organization
-            from utils.organization import organize_email_data
-            df_organized = organize_email_data(df)
-            
+    # SAFETY CHECK: Ensure columns exist before organizing
+    if structure == "Time Series":
+        if date_col and date_col in df.columns:
+            df_organized = organize_time_series(df, date_col)
         else:
-            # Fallback: Check if data looks like email data
-            from utils.detection import detect_email_data
-            is_email, confidence, email_cols = detect_email_data(df)
+            st.warning(f"Date column '{date_col}' not found in data. Using general organization.")
+            df_organized = df.copy()
             
-            if is_email and confidence >= 50:
-                st.info("Email data detected. Using email-specific organization.")
-                from utils.organization import organize_email_data
-                df_organized = organize_email_data(df)
-            else:
-                df_organized = df.copy()
+    elif structure == "Panel Data":
+        if date_col and entity_col:
+            df_organized = organize_panel_data(df, date_col, entity_col)
+        else:
+            st.warning("Missing date or entity column for panel data. Using general organization.")
+            df_organized = df.copy()
+            
+    elif structure == "Cross-Sectional":
+        df_organized = organize_cross_sectional(df)
         
-        st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Select Columns to Keep</h3>', unsafe_allow_html=True)
-        cols_to_keep = st.multiselect(
-            "Columns:",
-            df_organized.columns.tolist(),
-            default=df_organized.columns.tolist(),
-            label_visibility="collapsed"
-        )
-        
-        if cols_to_keep:
-            df_organized = df_organized[cols_to_keep]
-        
-        st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Organized Data</h3>', unsafe_allow_html=True)
-        st.dataframe(df_organized, use_container_width=True, height=400)
-        
-        with st.expander("Summary Statistics"):
-            if len(df_organized.select_dtypes(include=['number']).columns) > 0:
-                st.dataframe(df_organized.describe(), use_container_width=True)
-            else:
-                st.info("No numeric columns for statistics")
-        
-        st.session_state.df_organized = df_organized
+    elif structure == "Email Data":  # NEW: Email-specific organization
+        from utils.organization import organize_email_data
+        df_organized = organize_email_data(df)
         
     else:
-        # This should not happen with our safety checks, but keep as backup
-        st.info("Please detect data structure in the Detect tab first")
+        # Fallback: Check if data looks like email data
+        from utils.detection import detect_email_data
+        is_email, confidence, email_cols = detect_email_data(df)
+        
+        if is_email and confidence >= 50:
+            st.info("Email data detected. Using email-specific organization.")
+            from utils.organization import organize_email_data
+            df_organized = organize_email_data(df)
+        else:
+            df_organized = df.copy()
+    
+    st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Select Columns to Keep</h3>', unsafe_allow_html=True)
+    cols_to_keep = st.multiselect(
+        "Columns:",
+        df_organized.columns.tolist(),
+        default=df_organized.columns.tolist(),
+        label_visibility="collapsed"
+    )
+    
+    if cols_to_keep:
+        df_organized = df_organized[cols_to_keep]
+    
+    st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Organized Data</h3>', unsafe_allow_html=True)
+    st.dataframe(df_organized, use_container_width=True, height=400)
+    
+    with st.expander("Summary Statistics"):
+        if len(df_organized.select_dtypes(include=['number']).columns) > 0:
+            st.dataframe(df_organized.describe(), use_container_width=True)
+        else:
+            st.info("No numeric columns for statistics")
+    
+    st.session_state.df_organized = df_organized
+    
+else:
+    # This should not happen with our safety checks, but keep as backup
+    st.info("Please detect data structure in the Detect tab first")
 
 # TAB 4: EXPORT
 with tab4:

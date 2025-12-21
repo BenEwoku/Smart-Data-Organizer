@@ -251,7 +251,7 @@ with st.sidebar:
     )
 
 # Main content area
-tab1, tab2, tab3, tab4 = st.tabs(["Input", "Detect", "Organize", "Export"])
+tab1, tab2, tab3, tab4 = st.tabs(["Input", "Detect", "Organize", "Export", "Impute"])
 
 # TAB 1: INPUT
 with tab1:
@@ -767,17 +767,57 @@ with tab2:
                 st.dataframe(col_info, use_container_width=True)
             except Exception as e:
                 st.error(f"Could not generate column information: {str(e)}")
-        
+                
         # Quick actions
         st.markdown("---")
         st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Quick Actions</h3>', unsafe_allow_html=True)
-        
+
         col1, col2 = st.columns(2)
-        
+
         with col1:
-            if st.button("Fix Missing Values", use_container_width=True):
-                st.info("Missing value imputation feature coming soon!")
-        
+            # Get missing value statistics
+            missing_count = df_clean.isna().sum().sum() if df_clean is not None else 0
+            missing_pct = validation_result.get('missing_percentage', 0) if 'validation_result' in locals() else 0
+            
+            if missing_count > 0:
+                button_label = f"🛠️ Fix Missing Values ({missing_count:,} found)"
+                
+                if st.button(button_label, use_container_width=True, type="primary"):
+                    st.success(f"Found {missing_count:,} missing values ({missing_pct:.1f}%)")
+                    st.info("""
+                    **Missing Value Imputation is now available!**
+                    
+                    Please navigate to the **"Impute" tab (Tab 5)** to:
+                    • View all columns with missing values
+                    • Choose imputation methods (mean, median, mode, etc.)
+                    • Preview changes before applying
+                    • Delete rows/columns with missing data
+                    
+                    **Click on "Impute" in the tab bar above** ⬆️
+                    """)
+                    
+                    # Visual indicator
+                    st.markdown("""
+                    <div style="background-color: #e6f3ff; padding: 10px; border-radius: 5px; border-left: 5px solid #1f77b4; margin: 10px 0;">
+                    <strong>📍 Look for this tab:</strong> <span style="background-color: #1f77b4; color: white; padding: 2px 8px; border-radius: 3px; font-weight: bold;">Impute</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Show quick preview of missing columns
+                    if df_clean is not None:
+                        missing_cols = df_clean.columns[df_clean.isna().any()].tolist()
+                        if missing_cols:
+                            st.write("**Columns with missing values:**")
+                            for col in missing_cols[:5]:  # Show first 5
+                                missing_in_col = df_clean[col].isna().sum()
+                                st.write(f"• `{col}`: {missing_in_col} missing ({missing_in_col/len(df_clean)*100:.1f}%)")
+                            
+                            if len(missing_cols) > 5:
+                                st.caption(f"... and {len(missing_cols) - 5} more columns")
+            else:
+                if st.button("✅ Check Missing Values", use_container_width=True, disabled=False):
+                    st.success("Great! No missing values found in your data.")
+
         with col2:
             if st.button("Remove Duplicates", use_container_width=True):
                 try:
@@ -936,6 +976,266 @@ with tab4:
         
     else:
         st.info("Please organize your data in the Organize tab first")
+
+# Add to your tab definitions at the top of main content
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Input", "Detect", "Organize", "Export", "Impute"])
+
+# TAB 5: IMPUTE
+with tab5:
+    if st.session_state.df is not None:
+        st.markdown('<h2 class="subheader">Step 5: Handle Missing Values</h2>', unsafe_allow_html=True)
+        
+        df = st.session_state.df
+        
+        # Detect missing values
+        from utils.imputation import detect_missing_values
+        missing_stats = detect_missing_values(df)
+        
+        # Display summary
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Missing", f"{missing_stats['total_missing']:,}")
+        with col2:
+            st.metric("Missing %", f"{missing_stats['overall_missing_percent']:.1f}%")
+        with col3:
+            cols_with_missing = sum(1 for count in missing_stats['missing_by_column'].values() if count > 0)
+            st.metric("Columns Affected", cols_with_missing)
+        with col4:
+            if missing_stats['total_missing'] == 0:
+                st.metric("Status", "✅ Clean", delta="No missing values")
+            elif missing_stats['overall_missing_percent'] < 5:
+                st.metric("Status", "⚠️ Minor", delta=f"{missing_stats['overall_missing_percent']:.1f}%")
+            else:
+                st.metric("Status", "🔴 Needs Fix", delta=f"{missing_stats['overall_missing_percent']:.1f}%")
+        
+        if missing_stats['total_missing'] > 0:
+            st.markdown("---")
+            
+            # Option 1: Quick Fix (Auto-impute all)
+            with st.expander("⚡ Quick Fix (Auto-impute all columns)", expanded=True):
+                st.markdown("**Automatically apply recommended imputation methods:**")
+                
+                # Show suggested methods
+                suggestions = []
+                for col, method in missing_stats['suggested_methods'].items():
+                    if missing_stats['missing_by_column'][col] > 0:
+                        suggestions.append({
+                            'Column': col,
+                            'Type': missing_stats['column_types'][col],
+                            'Missing': missing_stats['missing_by_column'][col],
+                            'Method': method.upper(),
+                            'Description': get_method_description(method)
+                        })
+                
+                if suggestions:
+                    suggestions_df = pd.DataFrame(suggestions)
+                    st.dataframe(suggestions_df, use_container_width=True)
+                    
+                    if st.button("Apply All Suggested Methods", type="primary", use_container_width=True):
+                        from utils.imputation import batch_impute
+                        
+                        imputation_map = {}
+                        for col, method in missing_stats['suggested_methods'].items():
+                            if missing_stats['missing_by_column'][col] > 0:
+                                imputation_map[col] = method
+                        
+                        with st.spinner("Applying imputation..."):
+                            df_imputed, results = batch_impute(df, imputation_map)
+                            st.session_state.df = df_imputed
+                            
+                            # Show results
+                            st.success(f"Imputed {len(results)} columns successfully!")
+                            for col, result in results.items():
+                                st.info(f"• **{col}**: {result['imputed_count']} values imputed using {result['method']}")
+                            
+                            st.rerun()
+            
+            # Option 2: Column-by-column control
+            with st.expander("🔧 Advanced Column-by-Column Control", expanded=False):
+                st.markdown("**Select specific imputation methods for each column:**")
+                
+                columns_with_missing = [col for col, count in missing_stats['missing_by_column'].items() 
+                                       if count > 0]
+                
+                selected_columns = st.multiselect(
+                    "Select columns to impute:",
+                    columns_with_missing,
+                    default=columns_with_missing[:3] if len(columns_with_missing) > 3 else columns_with_missing
+                )
+                
+                if selected_columns:
+                    imputation_map = {}
+                    
+                    for col in selected_columns:
+                        st.markdown(f"### {col}")
+                        col1, col2, col3 = st.columns([2, 2, 1])
+                        
+                        with col1:
+                            st.caption(f"**Type:** {missing_stats['column_types'][col]}")
+                            st.caption(f"**Missing:** {missing_stats['missing_by_column'][col]} values ({missing_stats['missing_percentage'][col]:.1f}%)")
+                        
+                        with col2:
+                            # Method selection based on column type
+                            col_type = missing_stats['column_types'][col]
+                            
+                            if col_type == 'numeric':
+                                methods = ['median', 'mean', 'interpolate', 'knn', 'constant', 'delete', 'forward_fill', 'backward_fill']
+                                default_method = missing_stats['suggested_methods'].get(col, 'median')
+                            elif col_type == 'categorical':
+                                methods = ['mode', 'constant', 'delete', 'forward_fill']
+                                default_method = missing_stats['suggested_methods'].get(col, 'mode')
+                            elif col_type == 'datetime':
+                                methods = ['forward_fill', 'backward_fill', 'interpolate', 'constant', 'delete']
+                                default_method = missing_stats['suggested_methods'].get(col, 'forward_fill')
+                            else:
+                                methods = ['mode', 'constant', 'delete', 'forward_fill']
+                                default_method = 'mode'
+                            
+                            method = st.selectbox(
+                                f"Method for {col}:",
+                                methods,
+                                index=methods.index(default_method) if default_method in methods else 0,
+                                key=f"method_{col}"
+                            )
+                        
+                        with col3:
+                            # Preview button
+                            if st.button("Preview", key=f"preview_{col}"):
+                                from utils.imputation import get_imputation_preview
+                                preview = get_imputation_preview(df, col, method)
+                                
+                                with st.expander(f"Preview for {col}", expanded=True):
+                                    if preview['original_sample']:
+                                        st.write("**Before/After Examples:**")
+                                        for orig, imp in zip(preview['original_sample'], preview['imputed_sample']):
+                                            st.write(f"Row {orig['index']}: `{orig['value']}` → `{imp['value']}`")
+                                    
+                                    if preview['stats']:
+                                        st.write("**Column Statistics:**")
+                                        for stat_name, stat_value in preview['stats'].items():
+                                            st.write(f"- {stat_name}: {stat_value}")
+                        
+                        # Store in imputation map
+                        imputation_map[col] = method
+                        
+                        # Custom value input for constant method
+                        if method == 'constant':
+                            custom_col1, custom_col2 = st.columns(2)
+                            with custom_col1:
+                                if col_type == 'numeric':
+                                    custom_val = st.number_input(
+                                        f"Custom value for {col}:",
+                                        value=0.0,
+                                        key=f"custom_{col}"
+                                    )
+                                else:
+                                    custom_val = st.text_input(
+                                        f"Custom value for {col}:",
+                                        value="Missing",
+                                        key=f"custom_{col}"
+                                    )
+                                imputation_map[col] = ('constant', custom_val)
+                        
+                        st.markdown("---")
+                    
+                    # Apply button
+                    if st.button("Apply Selected Imputations", type="primary", use_container_width=True):
+                        from utils.imputation import batch_impute
+                        
+                        with st.spinner("Applying imputations..."):
+                            df_imputed, results = batch_impute(df, imputation_map)
+                            st.session_state.df = df_imputed
+                            
+                            # Show summary
+                            st.success("Imputation completed!")
+                            total_imputed = sum(r['imputed_count'] for r in results.values())
+                            st.info(f"**Total values imputed:** {total_imputed}")
+                            
+                            for col, result in results.items():
+                                st.write(f"• **{col}**: {result['imputed_count']} values → {result['method']}")
+                            
+                            st.rerun()
+            
+            # Option 3: Delete rows/columns
+            with st.expander("🗑️ Delete Missing Values", expanded=False):
+                st.markdown("**Delete rows or columns with missing values:**")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("Delete Rows with ANY Missing", use_container_width=True):
+                        original_len = len(df)
+                        df_clean = df.dropna()
+                        new_len = len(df_clean)
+                        removed = original_len - new_len
+                        
+                        if removed > 0:
+                            st.session_state.df = df_clean
+                            st.success(f"Removed {removed} rows ({removed/original_len*100:.1f}% of data)")
+                            st.rerun()
+                        else:
+                            st.info("No rows contained missing values")
+                
+                with col2:
+                    if st.button("Delete Columns with ANY Missing", use_container_width=True):
+                        original_cols = len(df.columns)
+                        df_clean = df.dropna(axis=1)
+                        new_cols = len(df_clean.columns)
+                        removed = original_cols - new_cols
+                        
+                        if removed > 0:
+                            st.session_state.df = df_clean
+                            st.success(f"Removed {removed} columns")
+                            st.rerun()
+                        else:
+                            st.info("No columns contained missing values")
+                
+                # Threshold-based deletion
+                st.markdown("---")
+                threshold = st.slider(
+                    "Delete rows with more than X% missing values:",
+                    0, 100, 50
+                )
+                
+                if st.button(f"Delete Rows with >{threshold}% Missing", use_container_width=True):
+                    threshold_fraction = threshold / 100
+                    original_len = len(df)
+                    
+                    # Calculate missing percentage per row
+                    missing_per_row = df.isna().mean(axis=1)
+                    rows_to_keep = missing_per_row <= threshold_fraction
+                    df_clean = df[rows_to_keep]
+                    new_len = len(df_clean)
+                    removed = original_len - new_len
+                    
+                    if removed > 0:
+                        st.session_state.df = df_clean
+                        st.success(f"Removed {removed} rows ({removed/original_len*100:.1f}% of data)")
+                        st.rerun()
+                    else:
+                        st.info(f"No rows had more than {threshold}% missing values")
+        
+        else:
+            st.success("✅ No missing values detected in your data!")
+            st.info("Your dataset is clean and ready for analysis.")
+    
+    else:
+        st.info("Please load data in the Input tab first")
+
+def get_method_description(method):
+    """Get description for imputation method"""
+    descriptions = {
+        'mean': 'Average value (good for normal distributions)',
+        'median': 'Middle value (robust to outliers)',
+        'mode': 'Most frequent value (for categories)',
+        'forward_fill': 'Use previous value',
+        'backward_fill': 'Use next value',
+        'interpolate': 'Estimate between neighboring values',
+        'knn': 'K-Nearest Neighbors estimation',
+        'constant': 'Fill with specified value',
+        'delete': 'Remove rows with missing values'
+    }
+    return descriptions.get(method, 'Custom method')
 
 # Footer
 st.markdown("---")

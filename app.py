@@ -250,6 +250,21 @@ with st.sidebar:
         help="Choose how you want to input your data"
     )
 
+def get_method_description(method):
+    """Get description for imputation method"""
+    descriptions = {
+        'mean': 'Average value (good for normal distributions)',
+        'median': 'Middle value (robust to outliers)',
+        'mode': 'Most frequent value (for categories)',
+        'forward_fill': 'Use previous value',
+        'backward_fill': 'Use next value',
+        'interpolate': 'Estimate between neighboring values',
+        'knn': 'K-Nearest Neighbors estimation',
+        'constant': 'Fill with specified value',
+        'delete': 'Remove rows with missing values'
+    }
+    return descriptions.get(method, 'Custom method')
+
 # Main content area
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["Input", "Detect", "Organize", "Export", "Impute"])
 
@@ -1221,21 +1236,6 @@ with tab5:
     
     else:
         st.info("Please load data in the Input tab first")
-
-def get_method_description(method):
-    """Get description for imputation method"""
-    descriptions = {
-        'mean': 'Average value (good for normal distributions)',
-        'median': 'Middle value (robust to outliers)',
-        'mode': 'Most frequent value (for categories)',
-        'forward_fill': 'Use previous value',
-        'backward_fill': 'Use next value',
-        'interpolate': 'Estimate between neighboring values',
-        'knn': 'K-Nearest Neighbors estimation',
-        'constant': 'Fill with specified value',
-        'delete': 'Remove rows with missing values'
-    }
-    return descriptions.get(method, 'Custom method')
 
 # Footer
 st.markdown("---")

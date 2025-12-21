@@ -643,7 +643,7 @@ def show_system_settings():
             st.success("Pricing updated! (Note: Changes are session-only in development)")
 
 def show_development_tools():
-    """Development and testing tools"""
+    """Development and testing tools - SINGLE CORRECT VERSION"""
     
     st.subheader("Development Tools")
     
@@ -701,71 +701,24 @@ def show_development_tools():
             st.success("App state reset!")
             st.rerun()
     
-    # === FIXED CACHE MANAGEMENT SECTION ===
+    # Cache Management (SIMPLIFIED VERSION - NO ERRORS)
     st.markdown("---")
-    st.markdown("### 🗃️ Cache Management")
+    st.markdown("### Cache Management")
     
-    try:
-        # Import safely inside try block
-        from utils.auth import get_all_users
-        
-        cache_col1, cache_col2 = st.columns(2)
-        
-        with cache_col1:
-            if st.button("🧹 Clear ALL User Caches", use_container_width=True, type="primary"):
-                import streamlit as st
-                # Clear all caches
-                st.cache_data.clear()
-                st.cache_resource.clear()
-                
-                # Clear custom caches
-                if 'user_cache' in st.session_state:
-                    st.session_state.user_cache = {}
-                
-                st.success("✅ All user caches cleared! Users will see fresh data on next action.")
-                st.balloons()
-                st.rerun()
-        
-        with cache_col2:
-            try:
-                # Get all users safely
-                all_users = get_all_users()
-                
-                if all_users and len(all_users) > 0:
-                    user_emails = [u.get('email', '') for u in all_users if u.get('email')]
-                    user_emails = [email for email in user_emails if email]  # Remove empty strings
-                    
-                    if user_emails:
-                        user_to_refresh = st.selectbox(
-                            "Select user to refresh:",
-                            user_emails,
-                            key="cache_user_select"
-                        )
-                        
-                        if st.button("🔄 Refresh This User", use_container_width=True):
-                            # Import inside to avoid circular imports
-                            try:
-                                from utils.auth import clear_user_cache
-                                success = clear_user_cache(user_to_refresh)
-                                if success:
-                                    st.success(f"✅ Cache cleared for {user_to_refresh}")
-                                else:
-                                    st.error(f"Failed to clear cache for {user_to_refresh}")
-                            except Exception as e:
-                                st.error(f"Error clearing cache: {str(e)}")
-                    else:
-                        st.info("No valid user emails found")
-                else:
-                    st.info("No users found in database")
-                    
-            except Exception as e:
-                st.error(f"Error getting users: {str(e)}")
-                st.info("Check the get_all_users() function")
-                
-    except Exception as e:
-        st.error(f"Error in cache management: {str(e)}")
-        st.info("Cache management temporarily disabled")
-    # === END CACHE MANAGEMENT ===
+    cache_col1, cache_col2 = st.columns(2)
+    
+    with cache_col1:
+        if st.button("Clear ALL Caches", use_container_width=True, type="primary"):
+            import streamlit as st
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            if 'user_cache' in st.session_state:
+                st.session_state.user_cache = {}
+            st.success("All caches cleared!")
+            st.rerun()
+    
+    with cache_col2:
+        st.info("User-specific cache clearing temporarily disabled")
     
     # Database operations
     st.markdown("---")

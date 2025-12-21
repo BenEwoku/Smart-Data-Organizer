@@ -7,6 +7,7 @@ import streamlit as st
 import hashlib
 from datetime import datetime
 import gsheets_db
+import time
 
 # Admin emails - Now from secrets
 try:
@@ -327,8 +328,19 @@ def get_conversions_remaining(user_data):
 
 def show_login_page():
     """Display login/signup page"""
-    # Check if Google Sheets is connected
-    sheets_connected = gsheets_db.sheet_exists()
+    
+    # Check sheets connection ONCE per session (not on every rerun)
+    if 'sheets_check_done' not in st.session_state:
+        st.session_state.sheets_check_done = False
+        st.session_state.sheets_connected = False
+    
+    # Only check if not already checked
+    if not st.session_state.sheets_check_done:
+        with st.spinner("Checking database connection..."):
+            st.session_state.sheets_connected = gsheets_db.sheet_exists()
+            st.session_state.sheets_check_done = True
+    
+    sheets_connected = st.session_state.sheets_connected
     
     if not sheets_connected:
         st.warning("""
@@ -365,6 +377,10 @@ def show_login_page():
                         Please refresh the page or click Login below.
                         """)
                         st.balloons()
+                        
+                        # Update the check flag
+                        st.session_state.sheets_connected = True
+                        st.session_state.sheets_check_done = True
                     else:
                         st.info("Database already has accounts. You can login below.")
                 else:
@@ -386,15 +402,18 @@ def show_login_page():
             
             if submit:
                 if email and password:
-                    success, message = verify_login(email, password)
-                    if success:
-                        login_user(email)
-                        st.success(message)
-                        if sheets_connected:
-                            st.info("✅ Connected to persistent database")
-                        st.rerun()
-                    else:
-                        st.error(message)
+                    with st.spinner("Logging in..."):
+                        success, message = verify_login(email, password)
+                        if success:
+                            login_user(email)
+                            st.success(message)
+                            if sheets_connected:
+                                st.info("✅ Connected to persistent database")
+                            # Small delay before rerun to show success message
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.error(message)
                 else:
                     st.warning("Please enter email and password")
         
@@ -435,14 +454,16 @@ def show_login_page():
                 elif not agree:
                     st.warning("Please agree to Terms of Service")
                 else:
-                    success, message = save_user(email, password, name)
-                    if success:
-                        if sheets_connected:
-                            st.success(f"{message} ✅ Saved to database")
+                    with st.spinner("Creating account..."):
+                        success, message = save_user(email, password, name)
+                        if success:
+                            if sheets_connected:
+                                st.success(f"{message} ✅ Saved to database")
+                            else:
+                                st.success(f"{message} (Local session only)")
+                            st.info("You can now login with your credentials")
                         else:
-                            st.success(f"{message} (Local session only)")
-                    else:
-                        st.error(message)
+                            st.error(message)
 
 def show_user_sidebar():
     """Display user info in sidebar"""

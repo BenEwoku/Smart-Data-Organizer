@@ -16,9 +16,16 @@ def parse_uploaded_file(uploaded_file):
         uploaded_file: Streamlit UploadedFile object
         
     Returns:
-        pd.DataFrame (never returns None)
+        pd.DataFrame (ALWAYS returns DataFrame, never None)
     """
     file_ext = uploaded_file.name.split('.')[-1].lower()
+    
+    # Initialize default result
+    default_df = pd.DataFrame({"File Info": [
+        f"File: {uploaded_file.name}",
+        f"Type: {file_ext.upper()}",
+        "Status: Processing..."
+    ]})
     
     try:
         if file_ext == 'csv':
@@ -33,21 +40,38 @@ def parse_uploaded_file(uploaded_file):
             df = parse_docx(uploaded_file)
         else:
             st.error(f"Unsupported file type: {file_ext}")
-            # Return empty DataFrame instead of None
             return pd.DataFrame({"Error": [f"Unsupported file type: {file_ext}"]})
+        
+        # FINAL SAFETY CHECK: Ensure we never return None
+        if df is None:
+            st.warning(f"Parser returned None for {file_ext} file")
+            return default_df
+            
+        # Ensure it's a DataFrame
+        if not isinstance(df, pd.DataFrame):
+            st.warning(f"Parser returned {type(df)} instead of DataFrame")
+            return default_df
+            
+        # Ensure it's not empty
+        if df.empty:
+            st.info(f"File parsed but returned empty DataFrame")
+            # Add at least one row
+            if len(df) == 0:
+                df = pd.DataFrame({"Info": ["File parsed successfully but no data extracted"]})
+        
+        return df
+        
     except Exception as e:
-        st.error(f"Error parsing {file_ext.upper()} file: {str(e)}")
-        # Return empty DataFrame instead of None
-        return pd.DataFrame({"Error": [f"Parsing failed: {str(e)[:100]}"]})
-    
-    # CRITICAL: Ensure we never return None
-    if df is None or (hasattr(df, 'empty') and df.empty):
-        return pd.DataFrame({"Info": ["File parsed but no structured data found"]})
-    
-    return df
+        st.error(f"Unexpected error parsing {file_ext.upper()} file: {str(e)}")
+        # Always return a DataFrame
+        return pd.DataFrame({
+            "Error": [f"Unexpected error: {str(e)[:200]}"],
+            "File": [uploaded_file.name],
+            "Type": [file_ext]
+        })
 
 def parse_csv(file):
-    """Parse CSV file"""
+    """Parse CSV file - always returns DataFrame"""
     try:
         df = pd.read_csv(file)
         return df
@@ -58,24 +82,11 @@ def parse_csv(file):
             return df
         except:
             st.error(f"CSV parsing error: {str(e)}")
-            return None
-
-def parse_txt(file):
-    """Parse TXT file"""
-    try:
-        content = file.read().decode('utf-8')
-        
-        # Try to detect structure
-        from utils.parser import parse_text_to_dataframe
-        df = parse_text_to_dataframe(content)
-        
-        return df
-    except Exception as e:
-        st.error(f"TXT parsing error: {str(e)}")
-        return None
+            # Return empty DataFrame instead of None
+            return pd.DataFrame({"Error": [f"CSV parsing failed: {str(e)[:100]}"]})
 
 def parse_excel(file):
-    """Parse Excel file (both .xlsx and .xls)"""
+    """Parse Excel file - always returns DataFrame"""
     try:
         # Try openpyxl first (for .xlsx)
         try:
@@ -87,8 +98,26 @@ def parse_excel(file):
             return df
     except Exception as e:
         st.error(f"Excel parsing error: {str(e)}")
-        st.info("Tip: Make sure the file isn't password-protected")
-        return None
+        # Return empty DataFrame instead of None
+        return pd.DataFrame({"Error": [f"Excel parsing failed: {str(e)[:100]}"]})
+
+def parse_txt(file):
+    """Parse TXT file - always returns DataFrame"""
+    try:
+        content = file.read().decode('utf-8')
+        
+        # Try to detect structure
+        from utils.parser import parse_text_to_dataframe
+        df = parse_text_to_dataframe(content)
+        
+        if df is not None:
+            return df
+        else:
+            return pd.DataFrame({"Content": [content[:500] + "..." if len(content) > 500 else content]})
+    except Exception as e:
+        st.error(f"TXT parsing error: {str(e)}")
+        # Return empty DataFrame instead of None
+        return pd.DataFrame({"Error": [f"TXT parsing failed: {str(e)[:100]}"]})
 
 def parse_pdf(file):
     """
@@ -213,7 +242,7 @@ def parse_docx(file):
     Parse DOCX file and extract tables
     
     Returns:
-        DataFrame or list of DataFrames
+        DataFrame (never returns None)
     """
     try:
         from docx import Document
@@ -221,7 +250,7 @@ def parse_docx(file):
         doc = Document(file)
         tables = []
         
-        st.info("📝 Extracting tables from Word document...")
+        st.info("Extracting tables from Word document...")
         
         # Extract all tables
         for table_num, table in enumerate(doc.tables, 1):
@@ -235,13 +264,17 @@ def parse_docx(file):
             
             if len(data) > 1:
                 # First row as header
-                df = pd.DataFrame(data[1:], columns=data[0])
+                # Handle empty headers
+                headers = data[0] if data[0] else [f"Column_{i}" for i in range(len(data[0]))]
+                df = pd.DataFrame(data[1:], columns=headers)
                 df = df.dropna(how='all', axis=1)
                 df = df.dropna(how='all', axis=0)
                 
                 if len(df) > 0:
+                    # Clean column names immediately
+                    df.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df.columns)]
                     tables.append(df)
-                    st.success(f"✅ Found table {table_num}")
+                    st.success(f"Found table {table_num}")
         
         if tables:
             if len(tables) == 1:
@@ -261,19 +294,24 @@ def parse_docx(file):
                 from utils.parser import parse_text_to_dataframe
                 df = parse_text_to_dataframe(all_text)
                 
-                if df is not None:
-                    st.success("✅ Successfully parsed text content")
+                if df is not None and len(df) > 0:
+                    st.success("Successfully parsed text content")
+                    # Clean column names
+                    df.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df.columns)]
                     return df
             
-            st.warning("No structured data found in document")
-            return None
+            # No data found - return empty DataFrame instead of None
+            st.warning("No structured data found in document. Creating empty DataFrame.")
+            return pd.DataFrame({"Info": ["No structured data found in Word document"]})
     
     except ImportError:
         st.error("python-docx not installed. Cannot parse DOCX files.")
-        return None
+        # Return empty DataFrame instead of None
+        return pd.DataFrame({"Error": ["python-docx library not installed"]})
     except Exception as e:
         st.error(f"DOCX parsing error: {str(e)}")
-        return None
+        # Return empty DataFrame instead of None
+        return pd.DataFrame({"Error": [f"DOCX parsing failed: {str(e)[:100]}"]})
 
 def combine_tables(tables):
     """

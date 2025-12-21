@@ -186,22 +186,18 @@ def get_current_user():
 def get_admin_list():
     """Get list of all admin emails from Google Sheets"""
     try:
-        all_users = gsheets_db.get_all_users_from_sheet()
+        all_users = get_all_users()
         admin_emails = []
         
         for user in all_users:
-            # Handle different is_admin formats
             is_admin_flag = user.get('is_admin', False)
             
-            # Convert string "TRUE"/"FALSE" to boolean
+            # Handle string "TRUE"/"FALSE"
             if isinstance(is_admin_flag, str):
-                is_admin_bool = is_admin_flag.lower() == 'true'
-            elif isinstance(is_admin_flag, int):
-                is_admin_bool = bool(is_admin_flag)
-            else:
-                is_admin_bool = bool(is_admin_flag)
-            
-            if is_admin_bool:
+                if is_admin_flag.upper() == 'TRUE':
+                    admin_emails.append(user['email'])
+            # Handle boolean True/False
+            elif is_admin_flag:
                 admin_emails.append(user['email'])
         
         # Always include default admins
@@ -211,10 +207,8 @@ def get_admin_list():
         except:
             pass
         
-        # Combine and deduplicate
         all_admins = list(set(admin_emails + default_admins))
         return all_admins
-        
     except Exception as e:
         print(f"Error getting admin list: {str(e)}")
         return ['admin@smartdata.com', st.secrets.get("admin", {}).get("admin_email", 'admin@example.com')]
@@ -330,6 +324,13 @@ def get_all_users():
     # Try to get from Google Sheets first
     sheet_users = gsheets_db.get_all_users_from_sheet()
     if sheet_users:
+        # Fix is_admin values from strings to booleans
+        for user in sheet_users:
+            is_admin_flag = user.get('is_admin', False)
+            if isinstance(is_admin_flag, str):
+                # Convert string "TRUE"/"FALSE" to boolean
+                user['is_admin'] = is_admin_flag.upper() == 'TRUE'
+        
         return sheet_users
     
     # Fallback to session state
@@ -342,7 +343,8 @@ def get_all_users():
             'tier': user_data['tier'],
             'conversions_used': user_data.get('conversions_used', 0),
             'created_at': user_data['created_at'],
-            'last_login': user_data.get('last_login', 'Never')
+            'last_login': user_data.get('last_login', 'Never'),
+            'is_admin': user_data.get('is_admin', False)  # Add is_admin
         })
     
     return user_list

@@ -261,7 +261,11 @@ def get_method_description(method):
         'interpolate': 'Estimate between neighboring values',
         'knn': 'K-Nearest Neighbors estimation',
         'constant': 'Fill with specified value',
-        'delete': 'Remove rows with missing values'
+        'delete': 'Remove rows with missing values',
+        'delete_rows': 'Delete rows where this column has missing values',
+        'impute_zero': 'Fill missing with 0',
+        'impute_unknown': "Fill missing with 'Unknown'",
+        'keep': 'Leave missing values as-is'
     }
     return descriptions.get(method, 'Custom method')
 
@@ -1170,10 +1174,178 @@ with tab5:
                                 st.write(f"• **{col}**: {result['imputed_count']} values → {result['method']}")
                             
                             st.rerun()
-            
-            # Option 3: Delete rows/columns
-            with st.expander("🗑️ Delete Missing Values", expanded=False):
-                st.markdown("**Delete rows or columns with missing values:**")
+                        
+            # Option 3: Delete rows/columns with granular control
+            with st.expander("🗑️ Delete Missing Values (Column-Specific)", expanded=False):
+                st.markdown("**Choose how to handle missing values for each column:**")
+                
+                # Get columns with missing values
+                missing_cols = [col for col, count in missing_stats['missing_by_column'].items() 
+                            if count > 0]
+                
+                if missing_cols:
+                    # Create a multi-select for columns
+                    st.markdown("### Select Columns to Clean")
+                    selected_columns = st.multiselect(
+                        "Choose columns to handle missing values:",
+                        missing_cols,
+                        default=missing_cols[:3] if len(missing_cols) > 3 else missing_cols,
+                        help="Select which columns you want to clean"
+                    )
+                    
+                    if selected_columns:
+                        st.markdown("### Choose Action for Each Column")
+                        
+                        # Dictionary to store actions for each column
+                        column_actions = {}
+                        
+                        for col in selected_columns:
+                            st.markdown(f"#### {col}")
+                            col_type = missing_stats['column_types'][col]
+                            missing_count = missing_stats['missing_by_column'][col]
+                            missing_pct = missing_stats['missing_percentage'][col]
+                            
+                            col1, col2, col3 = st.columns([3, 2, 1])
+                            
+                            with col1:
+                                st.caption(f"**Type:** {col_type}")
+                                st.caption(f"**Missing:** {missing_count} values ({missing_pct:.1f}%)")
+                            
+                            with col2:
+                                # Different options based on column type
+                                if col_type == 'numeric':
+                                    action_options = ["Keep as is", "Impute with median", "Impute with mean", 
+                                                    "Impute with zero", "Delete rows", "Fill with custom value"]
+                                elif col_type == 'categorical':
+                                    action_options = ["Keep as is", "Impute with mode", "Impute with 'Unknown'", 
+                                                    "Delete rows", "Fill with custom value"]
+                                elif col_type == 'datetime':
+                                    action_options = ["Keep as is", "Forward fill", "Backward fill", 
+                                                    "Delete rows", "Fill with custom value"]
+                                else:
+                                    action_options = ["Keep as is", "Impute with mode", "Delete rows", 
+                                                    "Fill with custom value"]
+                                
+                                # Select action
+                                action = st.selectbox(
+                                    f"Action for {col}:",
+                                    action_options,
+                                    key=f"action_{col}"
+                                )
+                            
+                            with col3:
+                                # Preview button
+                                if st.button("🔍 Preview", key=f"preview_action_{col}"):
+                                    st.info(f"Preview for {col}: {action}")
+                            
+                            # Store custom values if needed
+                            custom_value = None
+                            if "custom value" in action.lower():
+                                if col_type == 'numeric':
+                                    custom_value = st.number_input(
+                                        f"Custom value for {col}:",
+                                        value=0.0,
+                                        key=f"custom_val_{col}"
+                                    )
+                                else:
+                                    custom_value = st.text_input(
+                                        f"Custom value for {col}:",
+                                        value="Unknown",
+                                        key=f"custom_val_{col}"
+                                    )
+                            
+                            column_actions[col] = {
+                                'action': action,
+                                'custom_value': custom_value,
+                                'type': col_type
+                            }
+                            
+                            st.markdown("---")
+                        
+                        # Apply all actions button
+                        if st.button("🚀 Apply All Selected Actions", type="primary", use_container_width=True):
+                            df_processed = df.copy()
+                            results = []
+                            
+                            with st.spinner("Applying actions..."):
+                                for col, actions in column_actions.items():
+                                    action = actions['action']
+                                    custom_val = actions['custom_value']
+                                    
+                                    if action == "Delete rows":
+                                        # Delete rows where this column has missing values
+                                        before_len = len(df_processed)
+                                        df_processed = df_processed.dropna(subset=[col])
+                                        after_len = len(df_processed)
+                                        deleted = before_len - after_len
+                                        results.append(f"**{col}**: Deleted {deleted} rows")
+                                        
+                                    elif "Impute with median" in action:
+                                        df_processed[col] = df_processed[col].fillna(df_processed[col].median())
+                                        imputed = df[col].isna().sum() - df_processed[col].isna().sum()
+                                        results.append(f"**{col}**: Imputed {imputed} values with median")
+                                        
+                                    elif "Impute with mean" in action:
+                                        df_processed[col] = df_processed[col].fillna(df_processed[col].mean())
+                                        imputed = df[col].isna().sum() - df_processed[col].isna().sum()
+                                        results.append(f"**{col}**: Imputed {imputed} values with mean")
+                                        
+                                    elif "Impute with mode" in action:
+                                        mode_val = df_processed[col].mode()
+                                        fill_val = mode_val[0] if len(mode_val) > 0 else "Unknown"
+                                        df_processed[col] = df_processed[col].fillna(fill_val)
+                                        imputed = df[col].isna().sum() - df_processed[col].isna().sum()
+                                        results.append(f"**{col}**: Imputed {imputed} values with mode")
+                                        
+                                    elif "Forward fill" in action:
+                                        df_processed[col] = df_processed[col].ffill()
+                                        imputed = df[col].isna().sum() - df_processed[col].isna().sum()
+                                        results.append(f"**{col}**: Forward filled {imputed} values")
+                                        
+                                    elif "Backward fill" in action:
+                                        df_processed[col] = df_processed[col].bfill()
+                                        imputed = df[col].isna().sum() - df_processed[col].isna().sum()
+                                        results.append(f"**{col}**: Backward filled {imputed} values")
+                                        
+                                    elif "Impute with zero" in action:
+                                        df_processed[col] = df_processed[col].fillna(0)
+                                        imputed = df[col].isna().sum() - df_processed[col].isna().sum()
+                                        results.append(f"**{col}**: Imputed {imputed} values with zero")
+                                        
+                                    elif "Impute with 'Unknown'" in action:
+                                        df_processed[col] = df_processed[col].fillna("Unknown")
+                                        imputed = df[col].isna().sum() - df_processed[col].isna().sum()
+                                        results.append(f"**{col}**: Imputed {imputed} values with 'Unknown'")
+                                        
+                                    elif "Fill with custom value" in action and custom_val is not None:
+                                        df_processed[col] = df_processed[col].fillna(custom_val)
+                                        imputed = df[col].isna().sum() - df_processed[col].isna().sum()
+                                        results.append(f"**{col}**: Imputed {imputed} values with '{custom_val}'")
+                                    
+                                    # For "Keep as is" - do nothing
+                                
+                                # Update session state
+                                st.session_state.df = df_processed
+                                
+                                # Show results
+                                st.success("✅ Actions applied successfully!")
+                                st.markdown("### Results Summary")
+                                for result in results:
+                                    st.write(f"• {result}")
+                                
+                                # Show data loss warning if rows were deleted
+                                rows_deleted = len(df) - len(df_processed)
+                                if rows_deleted > 0:
+                                    st.warning(f"⚠️ **Note:** {rows_deleted} rows were deleted ({rows_deleted/len(df)*100:.1f}% of data)")
+                                
+                                st.rerun()
+                else:
+                    st.info("No columns have missing values to delete.")
+                
+                st.markdown("---")
+                
+                # Bulk deletion options (keep the original as well)
+                st.markdown("### Bulk Deletion Options")
                 
                 col1, col2 = st.columns(2)
                 
@@ -1204,38 +1376,6 @@ with tab5:
                             st.rerun()
                         else:
                             st.info("No columns contained missing values")
-                
-                # Threshold-based deletion
-                st.markdown("---")
-                threshold = st.slider(
-                    "Delete rows with more than X% missing values:",
-                    0, 100, 50
-                )
-                
-                if st.button(f"Delete Rows with >{threshold}% Missing", use_container_width=True):
-                    threshold_fraction = threshold / 100
-                    original_len = len(df)
-                    
-                    # Calculate missing percentage per row
-                    missing_per_row = df.isna().mean(axis=1)
-                    rows_to_keep = missing_per_row <= threshold_fraction
-                    df_clean = df[rows_to_keep]
-                    new_len = len(df_clean)
-                    removed = original_len - new_len
-                    
-                    if removed > 0:
-                        st.session_state.df = df_clean
-                        st.success(f"Removed {removed} rows ({removed/original_len*100:.1f}% of data)")
-                        st.rerun()
-                    else:
-                        st.info(f"No rows had more than {threshold}% missing values")
-        
-        else:
-            st.success("✅ No missing values detected in your data!")
-            st.info("Your dataset is clean and ready for analysis.")
-    
-    else:
-        st.info("Please load data in the Input tab first")
 
 # Footer
 st.markdown("---")

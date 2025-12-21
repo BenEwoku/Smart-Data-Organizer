@@ -33,7 +33,7 @@ st.markdown("""
     <style>
     /* Main header styling - MUCH larger and left-aligned */
     .main-header {
-        font-size: 4.5rem;
+        font-size: 6.5rem;
         font-weight: 900;
         color: #1f77b4;
         text-align: left;

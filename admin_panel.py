@@ -8,6 +8,132 @@ import pandas as pd
 from datetime import datetime
 import json
 
+def show_admin_management():
+    """Manage admin users"""
+    st.subheader("Admin User Management")
+    
+    from utils.auth import get_all_users, get_admin_list, promote_to_admin, demote_from_admin, is_admin
+    
+    # Get all users and admins
+    all_users = get_all_users()
+    admin_emails = get_admin_list()
+    
+    # Display current admins
+    st.markdown("### Current Administrators")
+    
+    if admin_emails:
+        admin_data = []
+        for email in admin_emails:
+            user = next((u for u in all_users if u['email'] == email), None)
+            if user:
+                admin_data.append({
+                    'Email': email,
+                    'Name': user.get('name', 'N/A'),
+                    'Tier': user.get('tier', 'N/A'),
+                    'Type': 'Super Admin' if email in ['admin@smartdata.com', st.secrets.get("admin", {}).get("admin_email")] else 'Admin'
+                })
+            else:
+                admin_data.append({
+                    'Email': email,
+                    'Name': 'System Admin',
+                    'Tier': 'N/A',
+                    'Type': 'Super Admin'
+                })
+        
+        admin_df = pd.DataFrame(admin_data)
+        st.dataframe(admin_df, use_container_width=True)
+        
+        st.info(f"**Total Administrators:** {len(admin_emails)}")
+    else:
+        st.warning("No administrators found")
+    
+    st.markdown("---")
+    
+    # Promote user to admin
+    st.markdown("### Promote User to Admin")
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        # Get non-admin users
+        non_admin_users = [u['email'] for u in all_users if u['email'] not in admin_emails]
+        
+        if non_admin_users:
+            selected_user = st.selectbox(
+                "Select user to promote:",
+                non_admin_users,
+                key="promote_user_select"
+            )
+            
+            # Show user info
+            user_info = next((u for u in all_users if u['email'] == selected_user), None)
+            if user_info:
+                st.caption(f"**Name:** {user_info['name']} | **Tier:** {user_info['tier']} | **Conversions:** {user_info['conversions_used']}")
+        else:
+            st.info("All users are already admins")
+            selected_user = None
+    
+    with col2:
+        if selected_user:
+            if st.button("Promote to Admin", type="primary", use_container_width=True):
+                success, message = promote_to_admin(selected_user)
+                if success:
+                    st.success(message)
+                    st.balloons()
+                    st.rerun()
+                else:
+                    st.error(message)
+    
+    st.markdown("---")
+    
+    # Demote admin
+    st.markdown("### Demote Admin to Regular User")
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        # Get admins that can be demoted (not super admins)
+        default_admins = ['admin@smartdata.com']
+        try:
+            default_admins.append(st.secrets["admin"]["admin_email"])
+        except:
+            pass
+        
+        demotable_admins = [email for email in admin_emails if email not in default_admins]
+        
+        if demotable_admins:
+            selected_admin = st.selectbox(
+                "Select admin to demote:",
+                demotable_admins,
+                key="demote_admin_select"
+            )
+            
+            # Show user info
+            user_info = next((u for u in all_users if u['email'] == selected_admin), None)
+            if user_info:
+                st.caption(f"**Name:** {user_info['name']} | **Tier:** {user_info['tier']}")
+            
+            st.warning("This will remove admin privileges from this user")
+        else:
+            st.info("No admins available for demotion (only super admins remain)")
+            selected_admin = None
+    
+    with col2:
+        if selected_admin:
+            if st.button("Demote Admin", type="secondary", use_container_width=True):
+                success, message = demote_from_admin(selected_admin)
+                if success:
+                    st.success(message)
+                    st.rerun()
+                else:
+                    st.error(message)
+    
+    st.markdown("---")
+    
+    # Admin activity log (placeholder)
+    with st.expander("Admin Activity Log"):
+        st.info("Admin activity logging coming soon")
+
 def show_admin_panel():
     """Main admin panel interface"""
     

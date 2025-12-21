@@ -255,7 +255,7 @@ with tab1:
         
         # Live preview for large inputs
         if text_input and len(text_input) > 50:
-            with st.expander("🔍 Live Preview", expanded=False):
+            with st.expander("Live Preview", expanded=False):
                 try:
                     preview_df = parse_text_to_dataframe(text_input[:5000])
                     if preview_df is not None:
@@ -267,7 +267,6 @@ with tab1:
         col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
             process_btn = st.button("Process Text", type="primary", use_container_width=True)
-
 
         if process_btn:
             if text_input:
@@ -296,37 +295,37 @@ with tab1:
                         
                         if validation_result["warnings"]:
                             for warning in validation_result["warnings"]:
-                                st.info(f"ℹ️ {warning}")
+                                st.info(f"{warning}")
                     
                     # Then process if user confirms
                     if st.button("Confirm and Process", type="primary"):
                         with st.spinner("Processing text..."):
-                    # Show progress
-                    progress_text = st.empty()
-                    progress_bar = st.progress(0)
-                    
-                    progress_text.text("Analyzing text format...")
-                    progress_bar.progress(30)
-                    
-                    df_raw = parse_text_to_dataframe(text_input)
-                    
-                    progress_text.text("Creating DataFrame...")
-                    progress_bar.progress(70)
-                    
-                    if df_raw is not None:
-                        st.session_state.df = df_raw
-                        # Increment conversion count
-                        increment_conversion_count(st.session_state.user_email)
-                        
-                        progress_text.text("Finalizing...")
-                        progress_bar.progress(100)
-                        
-                        time.sleep(0.5)  # Brief pause to show completion
-                        
-                        st.success("Text processed successfully!")
-                        st.rerun()
-                    else:
-                        st.error("Could not parse the text. Please check the format.")
+                            # Show progress
+                            progress_text = st.empty()
+                            progress_bar = st.progress(0)
+                            
+                            progress_text.text("Analyzing text format...")
+                            progress_bar.progress(30)
+                            
+                            df_raw = parse_text_to_dataframe(text_input)
+                            
+                            progress_text.text("Creating DataFrame...")
+                            progress_bar.progress(70)
+                            
+                            if df_raw is not None:
+                                st.session_state.df = df_raw
+                                # Increment conversion count
+                                increment_conversion_count(st.session_state.user_email)
+                                
+                                progress_text.text("Finalizing...")
+                                progress_bar.progress(100)
+                                
+                                time.sleep(0.5)  # Brief pause to show completion
+                                
+                                st.success("Text processed successfully!")
+                                st.rerun()
+                            else:
+                                st.error("Could not parse the text. Please check the format.")
             else:
                 st.warning("Please paste some data first")
     
@@ -422,10 +421,10 @@ with tab1:
                         st.session_state.df = df_raw
                         # Increment conversion count
                         increment_conversion_count(st.session_state.user_email)
-                        st.success("✓ File uploaded successfully!")
+                        st.success("File uploaded successfully!")
                         st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Error reading file: {str(e)}")
+                    st.error(f"Error reading file: {str(e)}")
     
     # Show examples
     with st.expander("View Examples & Tips"):

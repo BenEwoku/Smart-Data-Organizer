@@ -808,48 +808,53 @@ with tab3:
     
     # Now safely unpack
     structure, date_col, entity_col = st.session_state.data_structure
-        
-        # SAFETY CHECK: Ensure columns exist before organizing
-        if structure == "Time Series":
-            if date_col and date_col in df.columns:
-                df_organized = organize_time_series(df, date_col)
-            else:
-                st.warning(f"Date column '{date_col}' not found in data. Using general organization.")
-                df_organized = df.copy()
-                
-        elif structure == "Panel Data":
-            if date_col and entity_col:
-                df_organized = organize_panel_data(df, date_col, entity_col)
-            else:
-                st.warning("Missing date or entity column for panel data. Using general organization.")
-                df_organized = df.copy()
-                
-        elif structure == "Cross-Sectional":
-            df_organized = organize_cross_sectional(df)
+    
+    st.markdown('<h2 class="subheader">Step 3: Organize & Refine Data</h2>', unsafe_allow_html=True)
+    
+    # Get the DataFrame
+    df = st.session_state.df
+    
+    # SAFETY CHECK: Ensure columns exist before organizing
+    if structure == "Time Series":
+        if date_col and date_col in df.columns:
+            df_organized = organize_time_series(df, date_col)
         else:
+            st.warning(f"Date column '{date_col}' not found in data. Using general organization.")
             df_organized = df.copy()
-        
-        st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Select Columns to Keep</h3>', unsafe_allow_html=True)
-        cols_to_keep = st.multiselect(
-            "Columns:",
-            df_organized.columns.tolist(),
-            default=df_organized.columns.tolist(),
-            label_visibility="collapsed"
-        )
-        
-        if cols_to_keep:
-            df_organized = df_organized[cols_to_keep]
-        
-        st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Organized Data</h3>', unsafe_allow_html=True)
-        st.dataframe(df_organized, use_container_width=True, height=400)
-        
-        with st.expander("Summary Statistics"):
-            if len(df_organized.select_dtypes(include=['number']).columns) > 0:
-                st.dataframe(df_organized.describe(), use_container_width=True)
-            else:
-                st.info("No numeric columns for statistics")
-        
-        st.session_state.df_organized = df_organized
+            
+    elif structure == "Panel Data":
+        if date_col and entity_col:
+            df_organized = organize_panel_data(df, date_col, entity_col)
+        else:
+            st.warning("Missing date or entity column for panel data. Using general organization.")
+            df_organized = df.copy()
+            
+    elif structure == "Cross-Sectional":
+        df_organized = organize_cross_sectional(df)
+    else:
+        df_organized = df.copy()
+    
+    st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Select Columns to Keep</h3>', unsafe_allow_html=True)
+    cols_to_keep = st.multiselect(
+        "Columns:",
+        df_organized.columns.tolist(),
+        default=df_organized.columns.tolist(),
+        label_visibility="collapsed"
+    )
+    
+    if cols_to_keep:
+        df_organized = df_organized[cols_to_keep]
+    
+    st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Organized Data</h3>', unsafe_allow_html=True)
+    st.dataframe(df_organized, use_container_width=True, height=400)
+    
+    with st.expander("Summary Statistics"):
+        if len(df_organized.select_dtypes(include=['number']).columns) > 0:
+            st.dataframe(df_organized.describe(), use_container_width=True)
+        else:
+            st.info("No numeric columns for statistics")
+    
+    st.session_state.df_organized = df_organized
         
     else:
         st.info("Please detect data structure in the Detect tab first")

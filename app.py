@@ -134,7 +134,31 @@ def parse_mbox_file(mbox_file):
         # Calculate response times after all emails are loaded
         if len(df) > 0 and 'Thread_ID' in df.columns and 'Date' in df.columns:
             df = calculate_response_times(df)
-        
+
+        # ========== CRITICAL: PREVENT CATEGORICAL DATA ==========
+        if len(df) > 0:
+            # Force ALL string columns to plain string dtype
+            for col in df.columns:
+                if df[col].dtype.name == 'category':
+                    df[col] = df[col].astype(str)
+                elif df[col].dtype == 'object':
+                    # Already string/object, ensure it's not categorical
+                    try:
+                        # Convert to string and back to object
+                        df[col] = df[col].astype(str)
+                    except:
+                        pass
+            
+            # Convert numeric columns safely
+            numeric_cols = ['Priority_Score', 'Response_Time_Hours']
+            for col in numeric_cols:
+                if col in df.columns:
+                    try:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+                    except:
+                        pass
+        # ========== END CATEGORICAL FIX ==========
+
         return df
         
     except Exception as e:
@@ -263,43 +287,67 @@ def calculate_priority_score(subject, domain, body):
     return max(0, min(100, score))
 
 def calculate_response_times(df):
-    """Calculate response times between emails in same thread - fixed version"""
+    """Calculate response times between emails in same thread - SAFE VERSION"""
     if df.empty or 'Thread_ID' not in df.columns or 'Date' not in df.columns:
         return df
     
-    # Make sure Thread_ID is string to avoid categorical issues
+    # Create a copy and ensure ALL string columns are plain strings
     df = df.copy()
-    if pd.api.types.is_categorical_dtype(df['Thread_ID']):
-        df['Thread_ID'] = df['Thread_ID'].astype(str)
     
-    # Sort by thread and date
-    df_sorted = df.sort_values(['Thread_ID', 'Date']).copy()
+    # Convert ALL potential categorical columns to string FIRST
+    string_columns = ['Thread_ID', 'From', 'To', 'Subject', 'Email_ID', 'From_Domain', 'To_Domain']
+    for col in string_columns:
+        if col in df.columns:
+            # Force to string, no categorical
+            df[col] = df[col].astype(str)
     
-    response_times = []
+    # Also ensure Date is datetime
+    if 'Date' in df.columns:
+        try:
+            df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        except:
+            pass
     
-    for thread_id in df_sorted['Thread_ID'].unique():
-        thread_emails = df_sorted[df_sorted['Thread_ID'] == str(thread_id)]
-        
-        if len(thread_emails) > 1:
-            dates = thread_emails['Date'].tolist()
-            # Calculate time between consecutive emails in thread
-            for i in range(1, len(dates)):
-                if isinstance(dates[i], datetime) and isinstance(dates[i-1], datetime):
-                    time_diff = (dates[i] - dates[i-1]).total_seconds() / 3600  # Hours
-                    response_times.append(time_diff)
-                else:
-                    response_times.append(None)
-        else:
-            response_times.append(None)
-    
-    # Add response times to DataFrame
-    # Simplified approach - just add placeholder
+    # Initialize response time column
     df['Response_Time_Hours'] = None
     
-    # For better implementation, you'd need to match emails properly
-    # This is a simplified version
-    return df
-
+    try:
+        # Get unique thread IDs as plain strings
+        thread_ids = df['Thread_ID'].unique().tolist()
+        
+        # Process each thread
+        for thread_id in thread_ids:
+            if not thread_id or pd.isna(thread_id):
+                continue
+            
+            # Get emails in this thread
+            thread_mask = df['Thread_ID'] == thread_id
+            thread_emails = df[thread_mask].copy()
+            
+            if len(thread_emails) > 1:
+                # Sort by date
+                thread_emails = thread_emails.sort_values('Date')
+                
+                # Calculate time differences
+                dates = thread_emails['Date'].tolist()
+                
+                for i in range(1, len(dates)):
+                    if pd.notna(dates[i]) and pd.notna(dates[i-1]):
+                        try:
+                            time_diff = (dates[i] - dates[i-1]).total_seconds() / 3600  # Hours
+                            
+                            # Update the response time in original DataFrame
+                            email_index = thread_emails.index[i]
+                            df.at[email_index, 'Response_Time_Hours'] = time_diff
+                        except:
+                            pass
+        
+        return df
+        
+    except Exception as e:
+        # If anything fails, just return df with None response times
+        st.warning(f"Could not calculate response times: {str(e)[:100]}")
+        return df
 
 # Page configuration
 st.set_page_config(

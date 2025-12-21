@@ -5,6 +5,10 @@ Data organization utilities for structure-specific formatting
 
 import pandas as pd
 import streamlit as st
+# Add to existing imports in organization.py
+import re
+from datetime import datetime, timedelta
+from collections import Counter
 
 def organize_time_series(df, date_col):
     """
@@ -317,3 +321,446 @@ def resample_time_series(df, date_col, freq='D', agg_func='mean'):
         
     except:
         return df
+
+def organize_email_data(df):
+    """
+    Organize email data with email-specific analysis
+    
+    Args:
+        df: pandas DataFrame with email data
+        
+    Returns:
+        pd.DataFrame: Organized email data with email-specific metrics
+    """
+    df = df.copy()
+    
+    st.subheader("📧 Email Data Organization")
+    
+    # Check if this is actually email data
+    email_columns = ['From', 'To', 'Subject', 'Date']
+    has_email_columns = all(col in df.columns for col in email_columns[:3])
+    
+    if not has_email_columns:
+        st.warning("Data doesn't appear to contain standard email columns. Using general organization.")
+        return df
+    
+    # Email-specific organization options
+    st.markdown("### Email Organization Options")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Sort by options
+        sort_by = st.selectbox(
+            "Sort emails by:",
+            ["Date (newest first)", "Date (oldest first)", "Sender (A-Z)", "Recipient (A-Z)", 
+             "Subject (A-Z)", "Priority Score", "Thread Activity"]
+        )
+        
+        # Filter options
+        show_filters = st.checkbox("Apply email filters")
+    
+    with col2:
+        # Grouping options
+        group_by = st.selectbox(
+            "Group emails by:",
+            ["None", "Sender", "Recipient", "Date (day)", "Date (week)", "Date (month)", "Thread"]
+        )
+        
+        # Analysis options
+        analysis_type = st.multiselect(
+            "Add email analysis:",
+            ["Sentiment Score", "Response Time", "Email Length", "Attachment Count", "Urgency Flag"],
+            default=["Response Time"]
+        )
+    
+    # Apply sorting
+    df = apply_email_sorting(df, sort_by)
+    
+    # Apply filters if enabled
+    if show_filters:
+        df = apply_email_filters(df)
+    
+    # Apply grouping
+    if group_by != "None":
+        df = apply_email_grouping(df, group_by)
+    
+    # Add requested analyses
+    for analysis in analysis_type:
+        df = add_email_analysis(df, analysis)
+    
+    # Show email-specific insights
+    show_email_insights(df)
+    
+    return df
+
+def apply_email_sorting(df, sort_option):
+    """Apply email-specific sorting"""
+    try:
+        if "Date" in df.columns:
+            # Ensure Date is datetime
+            if not pd.api.types.is_datetime64_any_dtype(df['Date']):
+                df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        
+        if sort_option == "Date (newest first)":
+            if 'Date' in df.columns:
+                df = df.sort_values('Date', ascending=False)
+                st.success("✓ Sorted by date (newest first)")
+        
+        elif sort_option == "Date (oldest first)":
+            if 'Date' in df.columns:
+                df = df.sort_values('Date', ascending=True)
+                st.success("✓ Sorted by date (oldest first)")
+        
+        elif sort_option == "Sender (A-Z)":
+            if 'From' in df.columns:
+                df = df.sort_values('From', ascending=True)
+                st.success("✓ Sorted by sender (A-Z)")
+        
+        elif sort_option == "Recipient (A-Z)":
+            if 'To' in df.columns:
+                df = df.sort_values('To', ascending=True)
+                st.success("✓ Sorted by recipient (A-Z)")
+        
+        elif sort_option == "Subject (A-Z)":
+            if 'Subject' in df.columns:
+                df = df.sort_values('Subject', ascending=True)
+                st.success("✓ Sorted by subject (A-Z)")
+        
+        elif sort_option == "Priority Score":
+            if 'Priority_Score' in df.columns:
+                df = df.sort_values('Priority_Score', ascending=False)
+                st.success("✓ Sorted by priority score (highest first)")
+        
+        elif sort_option == "Thread Activity":
+            # Sort by thread activity (most recent in thread first)
+            if all(col in df.columns for col in ['Thread_ID', 'Date']):
+                # Get most recent date per thread
+                thread_latest = df.groupby('Thread_ID')['Date'].max()
+                df['Thread_Latest'] = df['Thread_ID'].map(thread_latest)
+                df = df.sort_values(['Thread_Latest', 'Date'], ascending=[False, False])
+                df = df.drop('Thread_Latest', axis=1)
+                st.success("✓ Sorted by thread activity")
+    
+    except Exception as e:
+        st.warning(f"Could not apply sorting: {str(e)}")
+    
+    return df
+
+def apply_email_filters(df):
+    """Apply email-specific filters"""
+    with st.expander("Email Filters", expanded=True):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Sender filter
+            if 'From' in df.columns:
+                unique_senders = df['From'].dropna().unique()
+                selected_senders = st.multiselect(
+                    "Filter by sender:",
+                    options=list(unique_senders)[:50],  # Limit to first 50
+                    default=[]
+                )
+                if selected_senders:
+                    df = df[df['From'].isin(selected_senders)]
+            
+            # Date range filter
+            if 'Date' in df.columns and pd.api.types.is_datetime64_any_dtype(df['Date']):
+                min_date = df['Date'].min().date()
+                max_date = df['Date'].max().date()
+                date_range = st.date_input(
+                    "Filter by date range:",
+                    value=[min_date, max_date],
+                    min_value=min_date,
+                    max_value=max_date
+                )
+                if len(date_range) == 2:
+                    df = df[(df['Date'].dt.date >= date_range[0]) & 
+                           (df['Date'].dt.date <= date_range[1])]
+        
+        with col2:
+            # Subject keyword filter
+            if 'Subject' in df.columns:
+                keyword = st.text_input("Filter by subject keyword:")
+                if keyword:
+                    df = df[df['Subject'].str.contains(keyword, case=False, na=False)]
+            
+            # Priority filter
+            if 'Priority_Score' in df.columns:
+                min_priority = st.slider("Minimum priority score:", 0, 100, 0)
+                df = df[df['Priority_Score'] >= min_priority]
+        
+        st.caption(f"Filtered to {len(df)} emails")
+    
+    return df
+
+def apply_email_grouping(df, group_option):
+    """Apply email grouping and aggregation"""
+    try:
+        if group_option == "Sender":
+            if 'From' in df.columns:
+                st.info("Grouping by sender - showing sender statistics")
+                # Add sender counts
+                sender_counts = df['From'].value_counts().reset_index()
+                sender_counts.columns = ['From', 'Email_Count']
+                df = df.merge(sender_counts, on='From', how='left')
+        
+        elif group_option == "Recipient":
+            if 'To' in df.columns:
+                st.info("Grouping by recipient - showing recipient statistics")
+                recipient_counts = df['To'].value_counts().reset_index()
+                recipient_counts.columns = ['To', 'Email_Count']
+                df = df.merge(recipient_counts, on='To', how='left')
+        
+        elif group_option == "Date (day)":
+            if 'Date' in df.columns:
+                st.info("Grouping by day - showing daily email volume")
+                df['Date_Day'] = df['Date'].dt.date
+                day_counts = df['Date_Day'].value_counts().reset_index()
+                day_counts.columns = ['Date_Day', 'Daily_Count']
+                df = df.merge(day_counts, on='Date_Day', how='left')
+        
+        elif group_option == "Date (week)":
+            if 'Date' in df.columns:
+                st.info("Grouping by week - showing weekly email volume")
+                df['Date_Week'] = df['Date'].dt.to_period('W').apply(lambda r: r.start_time.date())
+                week_counts = df['Date_Week'].value_counts().reset_index()
+                week_counts.columns = ['Date_Week', 'Weekly_Count']
+                df = df.merge(week_counts, on='Date_Week', how='left')
+        
+        elif group_option == "Date (month)":
+            if 'Date' in df.columns:
+                st.info("Grouping by month - showing monthly email volume")
+                df['Date_Month'] = df['Date'].dt.to_period('M').apply(lambda r: r.start_time.date())
+                month_counts = df['Date_Month'].value_counts().reset_index()
+                month_counts.columns = ['Date_Month', 'Monthly_Count']
+                df = df.merge(month_counts, on='Date_Month', how='left')
+        
+        elif group_option == "Thread":
+            if 'Thread_ID' in df.columns:
+                st.info("Grouping by thread - showing thread statistics")
+                thread_counts = df['Thread_ID'].value_counts().reset_index()
+                thread_counts.columns = ['Thread_ID', 'Thread_Size']
+                df = df.merge(thread_counts, on='Thread_ID', how='left')
+    
+    except Exception as e:
+        st.warning(f"Could not apply grouping: {str(e)}")
+    
+    return df
+
+def add_email_analysis(df, analysis_type):
+    """Add email-specific analysis columns"""
+    try:
+        if analysis_type == "Sentiment Score":
+            df = add_sentiment_analysis(df)
+            st.success("✓ Added sentiment analysis")
+        
+        elif analysis_type == "Response Time":
+            df = calculate_response_times_advanced(df)
+            st.success("✓ Added response time analysis")
+        
+        elif analysis_type == "Email Length":
+            df = calculate_email_length(df)
+            st.success("✓ Added email length analysis")
+        
+        elif analysis_type == "Attachment Count":
+            df = estimate_attachment_count(df)
+            st.success("✓ Added attachment count estimation")
+        
+        elif analysis_type == "Urgency Flag":
+            df = flag_urgent_emails(df)
+            st.success("✓ Added urgency flags")
+    
+    except Exception as e:
+        st.warning(f"Could not add {analysis_type}: {str(e)}")
+    
+    return df
+
+def add_sentiment_analysis(df):
+    """Simple sentiment analysis based on subject and body"""
+    try:
+        # Simple keyword-based sentiment
+        positive_words = ['thanks', 'thank you', 'great', 'good', 'excellent', 'awesome', 'happy']
+        negative_words = ['urgent', 'problem', 'issue', 'error', 'failed', 'broken', 'critical']
+        
+        def calculate_sentiment(text):
+            if not isinstance(text, str):
+                return 0
+            
+            text_lower = text.lower()
+            positive_count = sum(1 for word in positive_words if word in text_lower)
+            negative_count = sum(1 for word in negative_words if word in text_lower)
+            
+            # Simple sentiment score: positive - negative
+            return positive_count - negative_count
+        
+        # Apply to subject and body
+        if 'Subject' in df.columns:
+            df['Subject_Sentiment'] = df['Subject'].apply(calculate_sentiment)
+        
+        if 'Body_Preview' in df.columns:
+            df['Body_Sentiment'] = df['Body_Preview'].apply(calculate_sentiment)
+        
+        # Overall sentiment
+        if 'Subject_Sentiment' in df.columns and 'Body_Sentiment' in df.columns:
+            df['Overall_Sentiment'] = df['Subject_Sentiment'] + df['Body_Sentiment'] * 0.5
+    
+    except:
+        pass
+    
+    return df
+
+def calculate_response_times_advanced(df):
+    """Calculate response times between emails in threads"""
+    try:
+        if all(col in df.columns for col in ['Thread_ID', 'Date', 'From']):
+            # Sort by thread and date
+            df_sorted = df.sort_values(['Thread_ID', 'Date']).copy()
+            
+            response_times = []
+            for thread_id in df_sorted['Thread_ID'].unique():
+                thread_emails = df_sorted[df_sorted['Thread_ID'] == thread_id]
+                
+                if len(thread_emails) > 1:
+                    # Calculate response time for each email after first
+                    prev_sender = None
+                    prev_date = None
+                    
+                    for idx, row in thread_emails.iterrows():
+                        if prev_sender and prev_date and row['From'] != prev_sender:
+                            # Different sender - likely a response
+                            time_diff = (row['Date'] - prev_date).total_seconds() / 3600  # Hours
+                            response_times.append((idx, time_diff))
+                        else:
+                            response_times.append((idx, None))
+                        
+                        prev_sender = row['From']
+                        prev_date = row['Date']
+                else:
+                    # Single email in thread
+                    response_times.append((thread_emails.index[0], None))
+            
+            # Create response time series
+            response_series = pd.Series(dict(response_times))
+            df['Response_Time_Hours'] = df.index.map(response_series)
+    
+    except:
+        pass
+    
+    return df
+
+def calculate_email_length(df):
+    """Calculate email length metrics"""
+    try:
+        if 'Body_Preview' in df.columns:
+            df['Email_Length'] = df['Body_Preview'].apply(
+                lambda x: len(str(x)) if pd.notna(x) else 0
+            )
+            
+            # Categorize by length
+            def categorize_length(length):
+                if length < 100:
+                    return 'Very Short'
+                elif length < 500:
+                    return 'Short'
+                elif length < 2000:
+                    return 'Medium'
+                else:
+                    return 'Long'
+            
+            df['Email_Length_Category'] = df['Email_Length'].apply(categorize_length)
+    
+    except:
+        pass
+    
+    return df
+
+def estimate_attachment_count(df):
+    """Estimate attachment count based on keywords"""
+    try:
+        if 'Body_Preview' in df.columns:
+            attachment_keywords = ['attachment', 'attached', 'enclosed', 'file', 'document', 'pdf', 'doc', 'zip']
+            
+            def count_attachments(text):
+                if not isinstance(text, str):
+                    return 0
+                
+                text_lower = text.lower()
+                # Count mentions of attachment keywords
+                count = sum(1 for keyword in attachment_keywords if keyword in text_lower)
+                return min(count, 5)  # Cap at 5
+            
+            df['Estimated_Attachments'] = df['Body_Preview'].apply(count_attachments)
+    
+    except:
+        pass
+    
+    return df
+
+def flag_urgent_emails(df):
+    """Flag urgent emails based on content"""
+    try:
+        urgent_keywords = ['urgent', 'asap', 'immediate', 'emergency', 'critical', 'important']
+        urgent_pattern = '|'.join(urgent_keywords)
+        
+        if 'Subject' in df.columns:
+            df['Is_Urgent_Subject'] = df['Subject'].str.contains(
+                urgent_pattern, case=False, na=False
+            )
+        
+        if 'Body_Preview' in df.columns:
+            df['Is_Urgent_Body'] = df['Body_Preview'].str.contains(
+                urgent_pattern, case=False, na=False
+            )
+        
+        # Overall urgency flag
+        if 'Is_Urgent_Subject' in df.columns and 'Is_Urgent_Body' in df.columns:
+            df['Is_Urgent'] = df['Is_Urgent_Subject'] | df['Is_Urgent_Body']
+    
+    except:
+        pass
+    
+    return df
+
+def show_email_insights(df):
+    """Display email-specific insights"""
+    with st.expander("📊 Email Insights", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            # Top senders
+            if 'From' in df.columns:
+                top_senders = df['From'].value_counts().head(5)
+                st.metric("Top Sender", top_senders.index[0] if len(top_senders) > 0 else "N/A")
+                st.caption(f"Sends: {top_senders.iloc[0] if len(top_senders) > 0 else 0} emails")
+        
+        with col2:
+            # Email volume trend
+            if 'Date' in df.columns and pd.api.types.is_datetime64_any_dtype(df['Date']):
+                emails_per_day = len(df) / max(1, (df['Date'].max() - df['Date'].min()).days)
+                st.metric("Avg Emails/Day", f"{emails_per_day:.1f}")
+        
+        with col3:
+            # Thread analysis
+            if 'Thread_ID' in df.columns:
+                avg_thread_size = df['Thread_ID'].value_counts().mean()
+                st.metric("Avg Thread Size", f"{avg_thread_size:.1f}")
+        
+        # More detailed insights
+        if st.checkbox("Show detailed email statistics"):
+            st.markdown("---")
+            
+            # Sender analysis
+            if 'From' in df.columns:
+                st.markdown("**Top 10 Senders:**")
+                sender_stats = df['From'].value_counts().head(10)
+                st.dataframe(sender_stats.reset_index().rename(
+                    columns={'index': 'Sender', 'From': 'Email Count'}
+                ), use_container_width=True, height=200)
+            
+            # Time analysis
+            if 'Date' in df.columns:
+                st.markdown("**Email Distribution by Hour:**")
+                df['Hour'] = df['Date'].dt.hour
+                hour_counts = df['Hour'].value_counts().sort_index()
+                st.bar_chart(hour_counts)

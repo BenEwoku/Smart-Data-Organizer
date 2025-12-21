@@ -19,6 +19,246 @@ from admin_panel import show_admin_panel
 from utils.validation import validate_data_input, validate_dataframe, get_data_quality_score
 import pandas as pd
 
+import mailbox
+import email
+from email.header import decode_header
+import re
+from datetime import datetime
+
+
+def parse_mbox_file(mbox_file):
+    """
+    Parse MBOX file and extract email data into structured DataFrame
+    
+    Returns:
+        pd.DataFrame with columns:
+        Email_ID, From, From_Domain, To, To_Domain, 
+        Date, Subject, Body_Preview, Thread_ID, 
+        Response_Time, Priority_Score
+    """
+    emails = []
+    
+    try:
+        # Read MBOX file
+        mbox = mailbox.mbox(mbox_file)
+        
+        for i, message in enumerate(mbox):
+            try:
+                # Extract basic headers
+                from_header = str(message.get('From', ''))
+                to_header = str(message.get('To', ''))
+                subject = str(message.get('Subject', ''))
+                date_str = str(message.get('Date', ''))
+                
+                # Decode subject if encoded
+                if subject:
+                    decoded_subject = decode_header(subject)[0]
+                    if decoded_subject[1]:
+                        subject = decoded_subject[0].decode(decoded_subject[1], errors='ignore')
+                    else:
+                        subject = str(decoded_subject[0])
+                
+                # Extract email addresses and domains
+                from_email, from_domain = extract_email_and_domain(from_header)
+                to_email, to_domain = extract_email_and_domain(to_header)
+                
+                # Parse date
+                email_date = parse_email_date(date_str)
+                
+                # Extract body preview
+                body_preview = extract_email_body_preview(message)
+                
+                # Generate Email_ID
+                message_id = message.get('Message-ID', f'msg_{i}_{datetime.now().timestamp()}')
+                email_id = str(message_id).strip('<>')
+                
+                # Calculate thread ID (based on subject)
+                thread_id = generate_thread_id(subject)
+                
+                # Initialize response time and priority score
+                response_time = None
+                priority_score = calculate_priority_score(subject, from_domain, body_preview)
+                
+                emails.append({
+                    'Email_ID': email_id,
+                    'From': from_email,
+                    'From_Domain': from_domain,
+                    'To': to_email,
+                    'To_Domain': to_domain,
+                    'Date': email_date,
+                    'Subject': subject[:200] if subject else '',  # Limit subject length
+                    'Body_Preview': body_preview[:300] if body_preview else '',  # Limit preview
+                    'Thread_ID': thread_id,
+                    'Response_Time': response_time,  # Will be calculated later
+                    'Priority_Score': priority_score
+                })
+                
+            except Exception as e:
+                # Skip problematic emails but continue processing
+                continue
+        
+        # Create DataFrame
+        df = pd.DataFrame(emails)
+        
+        # Calculate response times after all emails are loaded
+        if len(df) > 0:
+            df = calculate_response_times(df)
+        
+        return df
+        
+    except Exception as e:
+        raise Exception(f"Error parsing MBOX file: {str(e)}")
+
+def extract_email_and_domain(header):
+    """Extract email address and domain from header"""
+    if not header:
+        return '', ''
+    
+    # Try to find email pattern
+    email_pattern = r'[\w\.-]+@[\w\.-]+\.\w+'
+    matches = re.findall(email_pattern, header)
+    
+    if matches:
+        email_addr = matches[0]
+        domain = email_addr.split('@')[-1] if '@' in email_addr else ''
+        return email_addr, domain
+    else:
+        # If no email pattern, return the header as is
+        return header, ''
+
+def parse_email_date(date_str):
+    """Parse email date string to datetime"""
+    try:
+        # Try multiple date formats
+        date_formats = [
+            '%a, %d %b %Y %H:%M:%S %z',
+            '%d %b %Y %H:%M:%S %z',
+            '%a, %d %b %Y %H:%M:%S %Z',
+            '%Y-%m-%d %H:%M:%S'
+        ]
+        
+        for fmt in date_formats:
+            try:
+                return datetime.strptime(date_str, fmt)
+            except:
+                continue
+        
+        # If all fail, return current date
+        return datetime.now()
+    except:
+        return datetime.now()
+
+def extract_email_body_preview(message):
+    """Extract plain text body preview from email"""
+    body = ""
+    
+    if message.is_multipart():
+        # Walk through multipart messages
+        for part in message.walk():
+            content_type = part.get_content_type()
+            content_disposition = str(part.get("Content-Disposition"))
+            
+            # Skip attachments
+            if "attachment" in content_disposition:
+                continue
+            
+            # Get plain text body
+            if content_type == "text/plain":
+                try:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        charset = part.get_content_charset() or 'utf-8'
+                        body += payload.decode(charset, errors='ignore')
+                except:
+                    pass
+    else:
+        # Single part message
+        try:
+            payload = message.get_payload(decode=True)
+            if payload:
+                charset = message.get_content_charset() or 'utf-8'
+                body = payload.decode(charset, errors='ignore')
+        except:
+            pass
+    
+    # Clean and preview
+    body = re.sub(r'\s+', ' ', body)  # Replace multiple whitespace
+    body = body.strip()
+    
+    return body
+
+def generate_thread_id(subject):
+    """Generate thread ID based on subject (remove Re:, Fwd:, etc.)"""
+    if not subject:
+        return "no_subject"
+    
+    # Clean subject for thread matching
+    clean_subject = re.sub(r'^(Re:|Fwd:|FW:|RE:|fwd:)\s*', '', subject, flags=re.IGNORECASE)
+    clean_subject = clean_subject.strip().lower()
+    
+    # Create hash for thread ID
+    import hashlib
+    return hashlib.md5(clean_subject.encode()).hexdigest()[:10]
+
+def calculate_priority_score(subject, domain, body):
+    """Calculate priority score based on content"""
+    score = 50  # Base score
+    
+    # Subject-based scoring
+    if subject:
+        subject_lower = subject.lower()
+        urgent_keywords = ['urgent', 'asap', 'important', 'critical', 'emergency']
+        for keyword in urgent_keywords:
+            if keyword in subject_lower:
+                score += 20
+        
+        # Reduce score for promotional emails
+        promo_keywords = ['newsletter', 'promotion', 'sale', 'discount', 'unsubscribe']
+        for keyword in promo_keywords:
+            if keyword in subject_lower:
+                score -= 15
+    
+    # Domain-based scoring
+    if domain:
+        # Higher priority for internal/corporate domains
+        internal_domains = ['company.com', 'corp.com', 'internal.com']
+        if any(internal in domain for internal in internal_domains):
+            score += 10
+    
+    # Normalize score
+    return max(0, min(100, score))
+
+def calculate_response_times(df):
+    """Calculate response times between emails in same thread"""
+    if df.empty or 'Thread_ID' not in df.columns or 'Date' not in df.columns:
+        return df
+    
+    # Sort by thread and date
+    df_sorted = df.sort_values(['Thread_ID', 'Date']).copy()
+    
+    response_times = []
+    
+    for thread_id in df_sorted['Thread_ID'].unique():
+        thread_emails = df_sorted[df_sorted['Thread_ID'] == thread_id]
+        
+        if len(thread_emails) > 1:
+            dates = thread_emails['Date'].tolist()
+            # Calculate time between consecutive emails in thread
+            for i in range(1, len(dates)):
+                if isinstance(dates[i], datetime) and isinstance(dates[i-1], datetime):
+                    time_diff = (dates[i] - dates[i-1]).total_seconds() / 3600  # Hours
+                    response_times.append(time_diff)
+                else:
+                    response_times.append(None)
+        else:
+            response_times.append(None)
+    
+    # Add response times to DataFrame (simplified approach)
+    # In production, you'd want a more sophisticated matching
+    df_sorted['Response_Time'] = None  # Placeholder
+    
+    return df_sorted
+
 
 # Page configuration
 st.set_page_config(
@@ -402,9 +642,10 @@ if is_admin(st.session_state.user_email):
 with st.sidebar:
     st.markdown("---")
     st.header("Settings")
+    # Change from 3 options to 4 options
     input_method = st.radio(
         "Input Method:",
-        ["Paste Text", "Web Scraping", "Upload File"],
+        ["Paste Text", "Web Scraping", "Upload File", "Email Export"],  # Added Email Export
         help="Choose how you want to input your data"
     )
 
@@ -731,6 +972,160 @@ with tab1:
                         st.session_state.data_cleaned = False
                         st.session_state.structure_detected = False
                         st.rerun()
+
+
+    elif input_method == "Email Export":
+        st.markdown("**Upload Email Export File**")
+        st.caption("Supported formats: MBOX (Gmail/Apple Mail), EML, CSV email exports")
+        
+        uploaded_email_file = st.file_uploader(
+            "Choose email file:",
+            type=['mbox', 'eml', 'csv', 'txt'],
+            label_visibility="collapsed"
+        )
+        
+        if uploaded_email_file:
+            # Determine file type
+            file_name = uploaded_email_file.name.lower()
+            
+            st.info(f"Uploaded: {uploaded_email_file.name} ({uploaded_email_file.size / 1024:.1f} KB)")
+            
+            with st.spinner("Parsing email data..."):
+                try:
+                    if file_name.endswith('.mbox'):
+                        # Save uploaded file temporarily
+                        import tempfile
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.mbox') as tmp_file:
+                            tmp_file.write(uploaded_email_file.getvalue())
+                            tmp_path = tmp_file.name
+                        
+                        # Parse MBOX file
+                        df_raw = parse_mbox_file(tmp_path)
+                        
+                        # Clean up temp file
+                        import os
+                        os.unlink(tmp_path)
+                        
+                    elif file_name.endswith('.eml'):
+                        # Parse single EML file
+                        from email import parser
+                        msg_parser = parser.BytesParser()
+                        message = msg_parser.parsebytes(uploaded_email_file.getvalue())
+                        
+                        # Convert single email to DataFrame
+                        from_email, from_domain = extract_email_and_domain(str(message.get('From', '')))
+                        to_email, to_domain = extract_email_and_domain(str(message.get('To', '')))
+                        
+                        df_raw = pd.DataFrame([{
+                            'Email_ID': str(message.get('Message-ID', 'single_email')).strip('<>'),
+                            'From': from_email,
+                            'From_Domain': from_domain,
+                            'To': to_email,
+                            'To_Domain': to_domain,
+                            'Date': parse_email_date(str(message.get('Date', ''))),
+                            'Subject': str(message.get('Subject', '')),
+                            'Body_Preview': extract_email_body_preview(message),
+                            'Thread_ID': 'single',
+                            'Response_Time': None,
+                            'Priority_Score': calculate_priority_score(
+                                str(message.get('Subject', '')), 
+                                from_domain, 
+                                extract_email_body_preview(message)
+                            )
+                        }])
+                        
+                    elif file_name.endswith('.csv'):
+                        # Parse CSV email export
+                        df_raw = pd.read_csv(uploaded_email_file)
+                        
+                        # Try to standardize column names
+                        column_mapping = {
+                            'from': 'From',
+                            'to': 'To', 
+                            'subject': 'Subject',
+                            'date': 'Date',
+                            'body': 'Body_Preview',
+                            'sender': 'From',
+                            'recipient': 'To'
+                        }
+                        
+                        df_raw.columns = [column_mapping.get(col.lower(), col) for col in df_raw.columns]
+                        
+                    else:
+                        st.error("Unsupported file format")
+                        df_raw = None
+                    
+                    if df_raw is not None and len(df_raw) > 0:
+                        # Clean column names
+                        df_raw.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df_raw.columns)]
+                        
+                        # Handle duplicate column names
+                        cols = pd.Series(df_raw.columns)
+                        for dup in cols[cols.duplicated()].unique():
+                            cols[cols == dup] = [f'{dup}_{i}' if i != 0 else dup for i in range(sum(cols == dup))]
+                        df_raw.columns = cols
+                        
+                        st.session_state.df = df_raw
+                        # Increment conversion count
+                        increment_conversion_count(st.session_state.user_email)
+                        
+                        # Show email-specific metrics
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Emails", f"{len(df_raw):,}")
+                        with col2:
+                            unique_senders = df_raw['From'].nunique() if 'From' in df_raw.columns else 0
+                            st.metric("Unique Senders", unique_senders)
+                        with col3:
+                            if 'Date' in df_raw.columns:
+                                try:
+                                    date_range = f"{df_raw['Date'].min().date()} to {df_raw['Date'].max().date()}"
+                                    st.metric("Date Range", date_range)
+                                except:
+                                    st.metric("Date Column", "Found")
+                        
+                        # Show preview
+                        with st.expander("Email Data Preview", expanded=True):
+                            st.dataframe(df_raw.head(10), use_container_width=True)
+                            st.caption(f"**Total:** {len(df_raw):,} emails × {len(df_raw.columns)} columns")
+                        
+                        st.success("Email data loaded successfully!")
+                        
+                        # Auto-advance hint
+                        st.info("Click on the **Detect** tab to continue with email analysis")
+                        
+                    else:
+                        st.error("Could not extract email data from file")
+                        
+                except Exception as e:
+                    st.error(f"Error parsing email file: {str(e)}")
+                    with st.expander("Technical Details"):
+                        st.code(str(e))
+        
+        # Instructions for users
+        with st.expander("How to Export Emails from Your Email Client", expanded=True):
+            st.markdown("""
+            ### **From Gmail:**
+            1. Go to [Google Takeout](https://takeout.google.com)
+            2. Select only **"Mail"**
+            3. Choose **MBOX format**
+            4. Download and upload the .mbox file here
+            
+            ### **From Outlook:**
+            1. Open Outlook desktop app
+            2. File → Open & Export → Import/Export
+            3. Export to a file → **Comma Separated Values**
+            4. Select folder and save as CSV
+            
+            ### **From Apple Mail/Thunderbird:**
+            1. Right-click the mailbox/folder
+            2. Select **"Export"** or **"Save As"**
+            3. Choose **MBOX format**
+            
+            ### **Privacy Note:**
+            Only upload emails you have permission to analyze
+            Remove sensitive information before uploading
+            """)
     
     # Show examples
     with st.expander("View Examples & Tips"):
@@ -900,21 +1295,192 @@ with tab2:
                 st.info("Multiple entities over time")
             elif structure == "Cross-Sectional":
                 st.info("Single point in time")
+            elif structure == "Email Data":
+                st.info("Email correspondence data")
             else:
                 st.info("General data format")
         
-        # Key columns detected
+        # ========== KEY COLUMNS DETECTED - ENHANCED FOR EMAIL DATA ==========
         if date_col or entity_col:
             st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Key Columns Detected</h3>', unsafe_allow_html=True)
-            cols = st.columns(2)
             
-            if date_col:
-                with cols[0]:
-                    st.success(f"**Date/Time Column:** `{date_col}`")
+            if structure == "Email Data":
+                # Email-specific column display
+                cols = st.columns(3)
+                
+                if date_col:
+                    with cols[0]:
+                        st.success(f"**Date Column:** `{date_col}`")
+                        # Show date range
+                        try:
+                            if 'Date' in df_clean.columns:
+                                min_date = df_clean['Date'].min().strftime('%Y-%m-%d')
+                                max_date = df_clean['Date'].max().strftime('%Y-%m-%d')
+                                st.caption(f"Range: {min_date} to {max_date}")
+                        except:
+                            pass
+                
+                if entity_col:
+                    with cols[1]:
+                        if entity_col == 'From':
+                            st.success(f"**👤 Sender Column:** `{entity_col}`")
+                        elif entity_col == 'To':
+                            st.success(f"**Recipient Column:** `{entity_col}`")
+                        else:
+                            st.success(f"**Entity Column:** `{entity_col}`")
+                
+                # Show other email columns
+                with cols[2]:
+                    email_cols_found = []
+                    for col in ['From', 'To', 'Subject', 'Body', 'Message', 'Body_Preview']:
+                        if col in df_clean.columns:
+                            email_cols_found.append(col)
+                    
+                    if email_cols_found:
+                        st.info(f"**Email columns:** {', '.join(email_cols_found[:3])}")
+                        if len(email_cols_found) > 3:
+                            st.caption(f"+ {len(email_cols_found) - 3} more")
+            else:
+                # Original display for non-email data
+                cols = st.columns(2)
+                
+                if date_col:
+                    with cols[0]:
+                        st.success(f"**Date/Time Column:** `{date_col}`")
+                
+                if entity_col:
+                    with cols[1]:
+                        st.success(f"**Entity Column:** `{entity_col}`")
+        
+        # ========== EMAIL-SPECIFIC INSIGHTS ==========
+        if structure == "Email Data":
+            st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Email Data Insights</h3>', unsafe_allow_html=True)
             
-            if entity_col:
-                with cols[1]:
-                    st.success(f"**Entity Column:** `{entity_col}`")
+            # Email-specific metrics
+            from utils.detection import detect_email_threads
+            thread_info = detect_email_threads(df_clean)
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                if 'From' in df_clean.columns:
+                    unique_senders = df_clean['From'].nunique()
+                    st.metric("Unique Senders", unique_senders)
+            
+            with col2:
+                if 'To' in df_clean.columns:
+                    unique_recipients = df_clean['To'].nunique()
+                    st.metric("Unique Recipients", unique_recipients)
+            
+            with col3:
+                if 'Date' in df_clean.columns:
+                    try:
+                        days_span = (df_clean['Date'].max() - df_clean['Date'].min()).days
+                        emails_per_day = len(df_clean) / max(1, days_span)
+                        st.metric("Emails/Day", f"{emails_per_day:.1f}")
+                    except:
+                        date_count = df_clean['Date'].notna().sum()
+                        st.metric("Emails with Date", date_count)
+            
+            with col4:
+                if thread_info['has_threads']:
+                    avg_thread = thread_info['avg_thread_size']
+                    st.metric("Avg Thread Size", f"{avg_thread:.1f}")
+                else:
+                    st.metric("Conversation Threads", "Individual")
+            
+            # Additional email analysis
+            with st.expander("Detailed Email Analysis", expanded=False):
+                # Sender analysis
+                if 'From' in df_clean.columns:
+                    st.markdown("**Top 10 Senders:**")
+                    top_senders = df_clean['From'].value_counts().head(10)
+                    
+                    if len(top_senders) > 0:
+                        sender_df = top_senders.reset_index()
+                        sender_df.columns = ['Sender', 'Email Count']
+                        sender_df['Percentage'] = (sender_df['Email Count'] / len(df_clean) * 100).round(1)
+                        
+                        st.dataframe(sender_df, use_container_width=True, height=250)
+                        
+                        # Visualize top senders
+                        if len(top_senders) > 1:
+                            st.bar_chart(top_senders.head(5))
+                    else:
+                        st.info("No sender data available")
+                
+                # Time analysis
+                if 'Date' in df_clean.columns and pd.api.types.is_datetime64_any_dtype(df_clean['Date']):
+                    st.markdown("**Email Distribution by Hour of Day:**")
+                    try:
+                        df_clean['Hour'] = df_clean['Date'].dt.hour
+                        hour_counts = df_clean['Hour'].value_counts().sort_index()
+                        st.bar_chart(hour_counts)
+                    except:
+                        pass
+                
+                # Thread analysis
+                if thread_info['has_threads'] and 'Subject' in df_clean.columns:
+                    st.markdown("**Conversation Thread Analysis:**")
+                    col_a, col_b = st.columns(2)
+                    
+                    with col_a:
+                        st.metric("Total Threads", thread_info['thread_count'])
+                    
+                    with col_b:
+                        st.metric("Total Emails", thread_info['total_emails'])
+                    
+                    # Show longest threads
+                    if 'Subject' in df_clean.columns:
+                        # Group by cleaned subject
+                        clean_subjects = df_clean['Subject'].astype(str).str.lower()
+                        clean_subjects = clean_subjects.str.replace(r'^(re:|fwd:|fw:|re\[\d+\]:|fwd\[\d+\]:)\s*', '', regex=True)
+                        
+                        thread_sizes = clean_subjects.value_counts()
+                        largest_threads = thread_sizes.head(5)
+                        
+                        if len(largest_threads) > 0:
+                            st.markdown("**Largest Conversations:**")
+                            for subject, count in largest_threads.items():
+                                subject_display = subject[:50] + "..." if len(subject) > 50 else subject
+                                st.write(f"• {subject_display}: {count} emails")
+            
+            # Email data quality check
+            st.markdown("### Email Data Quality")
+            
+            quality_col1, quality_col2, quality_col3 = st.columns(3)
+            
+            with quality_col1:
+                # Check for missing sender/recipient
+                missing_from = df_clean['From'].isna().sum() if 'From' in df_clean.columns else 0
+                missing_to = df_clean['To'].isna().sum() if 'To' in df_clean.columns else 0
+                missing_contacts = missing_from + missing_to
+                
+                if missing_contacts > 0:
+                    st.warning(f"Missing sender/recipient: {missing_contacts}")
+                else:
+                    st.success("✓ All emails have sender/recipient")
+            
+            with quality_col2:
+                # Check for missing subjects
+                missing_subject = df_clean['Subject'].isna().sum() if 'Subject' in df_clean.columns else 0
+                
+                if missing_subject > 0:
+                    st.warning(f"Missing subjects: {missing_subject}")
+                else:
+                    st.success("✓ All emails have subjects")
+            
+            with quality_col3:
+                # Check for missing dates
+                missing_date = df_clean['Date'].isna().sum() if 'Date' in df_clean.columns else 0
+                
+                if missing_date > 0:
+                    st.warning(f"Missing dates: {missing_date}")
+                else:
+                    st.success("✓ All emails have dates")
+            
+            st.markdown("---")
+        # ========== END EMAIL INSIGHTS ==========
         
         # Data preview
         st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Cleaned Data Preview</h3>', unsafe_allow_html=True)
@@ -949,29 +1515,51 @@ with tab2:
         st.markdown("---")
         st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Quick Actions</h3>', unsafe_allow_html=True)
 
-        col1, col2 = st.columns(2)
+        # EMAIL-SPECIFIC: Adjust layout based on data type
+        if structure == "Email Data":
+            col1, col2, col3, col4 = st.columns(4)  # 4 columns for email data
+        else:
+            col1, col2 = st.columns(2)  # 2 columns for other data
 
         with col1:
             # Get missing value statistics
             missing_count = df_clean.isna().sum().sum() if df_clean is not None else 0
             missing_pct = validation_result.get('missing_percentage', 0) if 'validation_result' in locals() else 0
             
+            # EMAIL-SPECIFIC: Different button label for email data
+            if structure == "Email Data":
+                button_label = f"Fix Email Issues ({missing_count:,})"
+            else:
+                button_label = f"Fix Missing Values ({missing_count:,})"
+            
             if missing_count > 0:
-                button_label = f"Fix Missing Values ({missing_count:,} found)"
-                
                 if st.button(button_label, use_container_width=True, type="primary"):
                     st.success(f"Found {missing_count:,} missing values ({missing_pct:.1f}%)")
-                    st.info("""
-                    **Missing Value Imputation is now available!**
                     
-                    Please navigate to the **"Impute" tab (Tab 5)** to:
-                    • View all columns with missing values
-                    • Choose imputation methods (mean, median, mode, etc.)
-                    • Preview changes before applying
-                    • Delete rows/columns with missing data
-                    
-                    **Click on "Impute" in the tab bar above**
-                    """)
+                    if structure == "Email Data":
+                        st.info("""
+                        **Email Data Cleaning is available!**
+                        
+                        Please navigate to the **"Impute" tab (Tab 5)** to:
+                        • Fix missing sender/recipient information
+                        • Clean email addresses and domains
+                        • Handle missing dates in email threads
+                        • Clean and standardize subject lines
+                        
+                        **Click on "Impute" in the tab bar above**
+                        """)
+                    else:
+                        st.info("""
+                        **Missing Value Imputation is now available!**
+                        
+                        Please navigate to the **"Impute" tab (Tab 5)** to:
+                        • View all columns with missing values
+                        • Choose imputation methods (mean, median, mode, etc.)
+                        • Preview changes before applying
+                        • Delete rows/columns with missing data
+                        
+                        **Click on "Impute" in the tab bar above**
+                        """)
                     
                     # Visual indicator
                     st.markdown("""
@@ -980,20 +1568,24 @@ with tab2:
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Show quick preview of missing columns
+                    # Show quick preview
                     if df_clean is not None:
                         missing_cols = df_clean.columns[df_clean.isna().any()].tolist()
                         if missing_cols:
                             st.write("**Columns with missing values:**")
-                            for col in missing_cols[:5]:  # Show first 5
+                            for col in missing_cols[:5]:
                                 missing_in_col = df_clean[col].isna().sum()
                                 st.write(f"• `{col}`: {missing_in_col} missing ({missing_in_col/len(df_clean)*100:.1f}%)")
                             
                             if len(missing_cols) > 5:
                                 st.caption(f"... and {len(missing_cols) - 5} more columns")
             else:
-                if st.button("Check Missing Values", use_container_width=True, disabled=False):
-                    st.success("Great! No missing values found in your data.")
+                if structure == "Email Data":
+                    if st.button("Email Data Clean", use_container_width=True, disabled=False):
+                        st.success("Great! No missing values in your email data.")
+                else:
+                    if st.button("Check Missing Values", use_container_width=True, disabled=False):
+                        st.success("Great! No missing values found in your data.")
 
         with col2:
             if st.button("Remove Duplicates", use_container_width=True):
@@ -1008,6 +1600,38 @@ with tab2:
                         st.info("No duplicate rows found")
                 except Exception as e:
                     st.error(f"Could not remove duplicates: {str(e)}")
+        
+        # ADD EMAIL-SPECIFIC ACTION BUTTONS
+        if structure == "Email Data":
+            with col3:
+                if st.button("Analyze Email Threads", use_container_width=True):
+                    from utils.detection import detect_email_threads
+                    thread_info = detect_email_threads(df_clean)
+                    
+                    with st.expander("Email Thread Analysis", expanded=True):
+                        st.write(f"**Total Emails:** {len(df_clean)}")
+                        st.write(f"**Conversation Threads:** {thread_info['thread_count']}")
+                        st.write(f"**Average Thread Size:** {thread_info['avg_thread_size']:.1f} emails")
+                        
+                        if thread_info['has_threads']:
+                            st.success("✓ Conversations detected")
+                            st.info("Go to **Tab 3: Organize** to group emails by threads and analyze response times")
+                        else:
+                            st.info("Mostly individual emails - no long conversations detected")
+            
+            with col4:
+                if st.button("Sender Analysis", use_container_width=True):
+                    if 'From' in df_clean.columns:
+                        top_senders = df_clean['From'].value_counts().head(10)
+                        
+                        with st.expander("Top Senders Analysis", expanded=True):
+                            for i, (sender, count) in enumerate(top_senders.items(), 1):
+                                percentage = (count / len(df_clean)) * 100
+                                st.write(f"{i}. **{sender}**: {count} emails ({percentage:.1f}%)")
+                        
+                        st.info("Go to **Tab 3: Organize** to group emails by sender for deeper analysis")
+                    else:
+                        st.warning("No 'From' column found for sender analysis")
         
     else:
         st.info("Please input data in the Input tab first")
@@ -1031,13 +1655,15 @@ with tab3:
         st.markdown('<h2 class="subheader">Step 3: Organize & Refine Data</h2>', unsafe_allow_html=True)
         
         df = st.session_state.df
+
+        # Get structure from session state
         structure, date_col, entity_col = st.session_state.data_structure
-        
+
         # ADDITIONAL SAFETY CHECK: Verify DataFrame is valid
         if df.empty or len(df) == 0:
             st.warning("DataFrame is empty. Please check your input data.")
             st.stop()
-        
+
         # SAFETY CHECK: Ensure columns exist before organizing
         if structure == "Time Series":
             if date_col and date_col in df.columns:
@@ -1055,8 +1681,22 @@ with tab3:
                 
         elif structure == "Cross-Sectional":
             df_organized = organize_cross_sectional(df)
+            
+        elif structure == "Email Data":  # NEW: Email-specific organization
+            from utils.organization import organize_email_data
+            df_organized = organize_email_data(df)
+            
         else:
-            df_organized = df.copy()
+            # Fallback: Check if data looks like email data
+            from utils.detection import detect_email_data
+            is_email, confidence, email_cols = detect_email_data(df)
+            
+            if is_email and confidence >= 50:
+                st.info("Email data detected. Using email-specific organization.")
+                from utils.organization import organize_email_data
+                df_organized = organize_email_data(df)
+            else:
+                df_organized = df.copy()
         
         st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Select Columns to Keep</h3>', unsafe_allow_html=True)
         cols_to_keep = st.multiselect(

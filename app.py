@@ -33,8 +33,8 @@ st.markdown("""
     <style>
     /* Main header styling - MUCH larger and left-aligned */
     .main-header {
-        font-size: 4.5rem;  /* Increased from 3rem */
-        font-weight: 900;   /* Increased from bold */
+        font-size: 4.5rem;
+        font-weight: 900;
         color: #1f77b4;
         text-align: left;
         margin-bottom: 0.5rem;
@@ -52,45 +52,48 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     
-    /* LIGHT COFFEE BROWN TABS */
+    /* NICE GREEN TABS WITH NO SPACES */
     .stTabs [data-baseweb="tab-list"] {
-        font-size: 1.3rem !important;  /* Slightly larger */
+        font-size: 1.3rem !important;
         font-weight: 600 !important;
-        background-color: #f5f1eb !important;  /* Light coffee cream base */
-        padding: 8px 8px 0 8px !important;
-        border-radius: 12px 12px 0 0 !important;
-        border-bottom: 3px solid #d7ccc8 !important;  /* Light brown border */
+        background-color: transparent !important;
+        padding: 0 !important;
+        margin-bottom: 20px !important;
+        gap: 0 !important;  /* NO SPACES BETWEEN TABS */
+        border-bottom: 3px solid #e0e0e0 !important;
     }
     
     .stTabs [data-baseweb="tab"] {
-        background-color: #efe6dd !important;  /* Light coffee brown */
-        color: #5d4037 !important;  /* Dark brown text */
-        padding: 15px 25px !important;
-        margin: 0 2px !important;
-        border-radius: 8px 8px 0 0 !important;
-        border: 2px solid transparent !important;
-        border-bottom: none !important;
+        background-color: #4caf50 !important;  /* Nice green */
+        color: white !important;
+        padding: 15px 30px !important;
+        margin: 0 !important;  /* NO SPACES */
+        border-radius: 0 !important;
+        border: none !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.3) !important;
         transition: all 0.2s ease !important;
         font-size: 1.2rem !important;
     }
     
+    /* Remove right border from last tab */
+    .stTabs [data-baseweb="tab"]:last-child {
+        border-right: none !important;
+    }
+    
     .stTabs [data-baseweb="tab"]:hover {
-        background-color: #e6d5c3 !important;  /* Slightly darker coffee */
-        color: #4e342e !important;
-        transform: translateY(-2px);
-        border: 2px solid #d7ccc8 !important;
-        border-bottom: none !important;
+        background-color: #45a049 !important;  /* Darker green on hover */
+        color: white !important;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     }
     
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        background-color: #d7ccc8 !important;  /* Active tab - medium coffee brown */
-        color: #3e2723 !important;  /* Very dark brown */
-        border: 2px solid #bcaaa4 !important;
-        border-bottom: 2px solid white !important;
-        position: relative;
-        z-index: 100;
+        background-color: #2e7d32 !important;  /* Dark green for active */
+        color: white !important;
         font-weight: 700 !important;
-        box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.05);
+        border-bottom: 3px solid #1b5e20 !important;
+        position: relative;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     }
     
     /* Remove the default blue indicator */
@@ -98,14 +101,42 @@ st.markdown("""
         display: none !important;
     }
     
-    /* Tab content area to match */
-    .stTabs [data-baseweb="tab-panel"] {
+    /* COFFEE BROWN TABLE HEADERS */
+    .dataframe th {
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        background-color: #d7ccc8 !important;  /* Coffee brown */
+        color: #3e2723 !important;  /* Dark brown text */
+        padding: 12px 15px !important;
+        border: 1px solid #bcaaa4 !important;
+        text-align: left !important;
+    }
+    
+    /* Coffee brown hover effect for headers */
+    .dataframe th:hover {
+        background-color: #bcaaa4 !important;
+    }
+    
+    /* Coffee brown for other table elements if needed */
+    .stDataFrame th {
+        background-color: #d7ccc8 !important;
+        color: #3e2723 !important;
+    }
+    
+    /* Table cells styling */
+    .dataframe td {
+        font-size: 1rem !important;
+        padding: 10px 15px !important;
+        border: 1px solid #e0e0e0 !important;
+    }
+    
+    /* Zebra striping for rows */
+    .dataframe tr:nth-child(even) {
+        background-color: #f9f9f9 !important;
+    }
+    
+    .dataframe tr:nth-child(odd) {
         background-color: white !important;
-        border: 2px solid #d7ccc8 !important;
-        border-top: none !important;
-        border-radius: 0 0 12px 12px !important;
-        padding: 25px !important;
-        margin-top: -2px !important;
     }
     
     /* Regular text */
@@ -125,21 +156,40 @@ st.markdown("""
         font-weight: 600 !important;
     }
     
-    /* Button text */
+    /* Button text - make buttons match green theme */
     .stButton > button {
         font-size: 1.1rem !important;
         font-weight: 600 !important;
+        background-color: #4caf50 !important;
+        color: white !important;
+        border: none !important;
+        padding: 10px 20px !important;
+        border-radius: 5px !important;
+        transition: background-color 0.2s ease !important;
     }
     
-    /* Dataframe headers */
-    .dataframe th {
-        font-size: 1.1rem !important;
-        font-weight: 600 !important;
+    .stButton > button:hover {
+        background-color: #45a049 !important;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     }
     
-    /* Dataframe cells */
-    .dataframe td {
-        font-size: 1rem !important;
+    /* Primary buttons - darker green */
+    .stButton > button[kind="primary"] {
+        background-color: #2e7d32 !important;
+    }
+    
+    .stButton > button[kind="primary"]:hover {
+        background-color: #1b5e20 !important;
+    }
+    
+    /* Secondary buttons - light coffee brown */
+    .stButton > button[kind="secondary"] {
+        background-color: #d7ccc8 !important;
+        color: #3e2723 !important;
+    }
+    
+    .stButton > button[kind="secondary"]:hover {
+        background-color: #bcaaa4 !important;
     }
     
     /* Input labels */
@@ -173,11 +223,26 @@ st.markdown("""
     .stDownloadButton button {
         width: 100%;
         font-size: 1.1rem;
+        background-color: #4caf50 !important;
+        color: white !important;
+    }
+    
+    .stDownloadButton button:hover {
+        background-color: #45a049 !important;
     }
     
     /* Make the title in browser tab larger */
     .css-10trblm {
         font-size: 1.3rem !important;
+    }
+    
+    /* Tab content area */
+    .stTabs [data-baseweb="tab-panel"] {
+        background-color: white !important;
+        padding: 25px !important;
+        border-radius: 0 0 5px 5px !important;
+        border: 1px solid #e0e0e0 !important;
+        border-top: none !important;
     }
     </style>
 """, unsafe_allow_html=True)

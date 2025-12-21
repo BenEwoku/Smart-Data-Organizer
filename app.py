@@ -52,53 +52,86 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     
-    /* NICE GREEN TABS WITH NO SPACES */
+    /* GOOGLE CHROME-STYLE COFFEE BROWN TABS */
     .stTabs [data-baseweb="tab-list"] {
         font-size: 1.3rem !important;
         font-weight: 600 !important;
         background-color: transparent !important;
-        padding: 0 !important;
-        margin-bottom: 20px !important;
-        gap: 0 !important;  /* NO SPACES BETWEEN TABS */
-        border-bottom: 3px solid #e0e0e0 !important;
+        padding: 10px 10px 0 10px !important;  /* Add top padding for rounded effect */
+        margin-bottom: 0 !important;
+        gap: 2px !important;  /* Small gap like Chrome tabs */
+        border-bottom: none !important;
     }
-    
+
     .stTabs [data-baseweb="tab"] {
-        background-color: #4caf50 !important;  /* Nice green */
-        color: white !important;
-        padding: 15px 30px !important;
-        margin: 0 !important;  /* NO SPACES */
-        border-radius: 0 !important;
-        border: none !important;
-        border-right: 1px solid rgba(255, 255, 255, 0.3) !important;
+        background-color: #d7ccc8 !important;  /* Coffee brown */
+        color: #5d4037 !important;  /* Dark brown text */
+        padding: 12px 25px 10px 25px !important;
+        margin: 0 !important;
+        border-radius: 10px 10px 0 0 !important;  /* Rounded top corners like Chrome */
+        border: 1px solid #bcaaa4 !important;
+        border-bottom: none !important;
         transition: all 0.2s ease !important;
         font-size: 1.2rem !important;
-    }
-    
-    /* Remove right border from last tab */
-    .stTabs [data-baseweb="tab"]:last-child {
-        border-right: none !important;
-    }
-    
-    .stTabs [data-baseweb="tab"]:hover {
-        background-color: #45a049 !important;  /* Darker green on hover */
-        color: white !important;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    }
-    
-    .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        background-color: #2e7d32 !important;  /* Dark green for active */
-        color: white !important;
-        font-weight: 700 !important;
-        border-bottom: 3px solid #1b5e20 !important;
         position: relative;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        z-index: 1;
+        box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.05);
     }
-    
+
+    /* Connect tabs like Chrome - overlap slightly */
+    .stTabs [data-baseweb="tab"]:not(:first-child) {
+        margin-left: -5px !important;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #efebe9 !important;  /* Lighter coffee on hover */
+        color: #3e2723 !important;
+        transform: translateY(-2px);
+        z-index: 10;
+        box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background-color: #f5f1eb !important;  /* Light cream coffee for active */
+        color: #3e2723 !important;  /* Very dark brown */
+        font-weight: 700 !important;
+        border: 2px solid #a1887f !important;
+        border-bottom: 2px solid white !important;  /* Connect to content */
+        z-index: 100 !important;
+        padding: 12px 25px 12px 25px !important;  /* Slightly taller */
+        box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.08);
+        position: relative;
+    }
+
+    /* Add subtle curve at bottom corners of active tab */
+    .stTabs [data-baseweb="tab"][aria-selected="true"]::before {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: -2px;
+        right: -2px;
+        height: 6px;
+        background-color: white;
+        border-radius: 0 0 3px 3px;
+        z-index: 101;
+    }
+
     /* Remove the default blue indicator */
     .stTabs [data-baseweb="tab"][aria-selected="true"]::after {
         display: none !important;
+    }
+
+    /* Tab content area - connect seamlessly with active tab */
+    .stTabs [data-baseweb="tab-panel"] {
+        background-color: white !important;
+        padding: 25px !important;
+        border-radius: 0 0 8px 8px !important;
+        border: 2px solid #a1887f !important;
+        border-top: none !important;
+        margin-top: -2px !important;  /* Pull up to connect with tabs */
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        position: relative;
+        z-index: 50;
     }
     
     /* COFFEE BROWN TABLE HEADERS */

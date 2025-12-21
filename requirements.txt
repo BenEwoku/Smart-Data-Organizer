@@ -20,6 +20,11 @@ plotly>=5.18.0
 black>=23.0.0
 pytest>=7.4.0
 
+# Add these:
+gspread>=5.0.0
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+
 # Phase 2: Payment processing (optional - for production)
 # stripe>=5.5.0
 

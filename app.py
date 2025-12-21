@@ -204,7 +204,7 @@ if not can_convert(user):
 # Add demo button for admin
 if is_admin(st.session_state.user_email):
     st.sidebar.markdown("---")
-    if st.sidebar.button("🚀 Load Demo Data", use_container_width=True, type="secondary"):
+    if st.sidebar.button("Load Demo Data", use_container_width=True, type="secondary"):
         sample_data = """Date,Sales,Region,Product
 2024-01-01,1500,North,Widget A
 2024-01-01,2300,South,Widget B

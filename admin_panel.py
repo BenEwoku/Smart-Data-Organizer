@@ -654,21 +654,24 @@ def show_development_tools():
         
         # Test data generation
         if st.button("Generate Test Dataset", use_container_width=True):
-            import pandas as pd
-            import numpy as np
-            
-            # Create sample time series data
-            dates = pd.date_range(start='2024-01-01', periods=100, freq='D')
-            data = {
-                'Date': dates,
-                'Sales': np.random.randint(1000, 5000, 100),
-                'Revenue': np.random.randint(50000, 200000, 100),
-                'Region': np.random.choice(['North', 'South', 'East', 'West'], 100)
-            }
-            
-            df = pd.DataFrame(data)
-            st.session_state.df = df
-            st.success("Test dataset generated! Switch to Home tab to see it.")
+            try:
+                import pandas as pd
+                import numpy as np
+                
+                # Create sample time series data
+                dates = pd.date_range(start='2024-01-01', periods=100, freq='D')
+                data = {
+                    'Date': dates,
+                    'Sales': np.random.randint(1000, 5000, 100),
+                    'Revenue': np.random.randint(50000, 200000, 100),
+                    'Region': np.random.choice(['North', 'South', 'East', 'West'], 100)
+                }
+                
+                df = pd.DataFrame(data)
+                st.session_state.df = df
+                st.success("Test dataset generated! Switch to Home tab to see it.")
+            except Exception as e:
+                st.error(f"Error generating test data: {str(e)}")
         
         # Clear all data
         if st.button("Clear All App Data", use_container_width=True, type="secondary"):
@@ -697,51 +700,71 @@ def show_development_tools():
             
             st.success("App state reset!")
             st.rerun()
-
-    # === ADD CACHE MANAGEMENT HERE ===
+    
+    # === FIXED CACHE MANAGEMENT SECTION ===
     st.markdown("---")
-    st.markdown("### Cache Management")
+    st.markdown("### 🗃️ Cache Management")
     
-    from utils.auth import get_all_users
-    
-    cache_col1, cache_col2 = st.columns(2)
-    
-    with cache_col1:
-        if st.button("Clear ALL User Caches", use_container_width=True, type="primary"):
-            import streamlit as st
-            # Clear all caches
-            st.cache_data.clear()
-            st.cache_resource.clear()
-            
-            # Clear custom caches
-            if 'user_cache' in st.session_state:
-                st.session_state.user_cache = {}
-            
-            st.success("All user caches cleared! Users will see fresh data on next action.")
-            st.balloons()
-            st.rerun()
-    
-    with cache_col2:
-        # Get all users for the dropdown
-        all_users = get_all_users()
-        user_emails = [u['email'] for u in all_users] if all_users else []
+    try:
+        # Import safely inside try block
+        from utils.auth import get_all_users
         
-        if user_emails:
-            user_to_refresh = st.selectbox(
-                "Select user to refresh:",
-                user_emails,
-                key="cache_user_select"
-            )
-            
-            if st.button("Refresh This User", use_container_width=True):
-                from utils.auth import clear_user_cache
-                success = clear_user_cache(user_to_refresh)
-                if success:
-                    st.success(f"Cache cleared for {user_to_refresh}")
+        cache_col1, cache_col2 = st.columns(2)
+        
+        with cache_col1:
+            if st.button("🧹 Clear ALL User Caches", use_container_width=True, type="primary"):
+                import streamlit as st
+                # Clear all caches
+                st.cache_data.clear()
+                st.cache_resource.clear()
+                
+                # Clear custom caches
+                if 'user_cache' in st.session_state:
+                    st.session_state.user_cache = {}
+                
+                st.success("✅ All user caches cleared! Users will see fresh data on next action.")
+                st.balloons()
+                st.rerun()
+        
+        with cache_col2:
+            try:
+                # Get all users safely
+                all_users = get_all_users()
+                
+                if all_users and len(all_users) > 0:
+                    user_emails = [u.get('email', '') for u in all_users if u.get('email')]
+                    user_emails = [email for email in user_emails if email]  # Remove empty strings
+                    
+                    if user_emails:
+                        user_to_refresh = st.selectbox(
+                            "Select user to refresh:",
+                            user_emails,
+                            key="cache_user_select"
+                        )
+                        
+                        if st.button("🔄 Refresh This User", use_container_width=True):
+                            # Import inside to avoid circular imports
+                            try:
+                                from utils.auth import clear_user_cache
+                                success = clear_user_cache(user_to_refresh)
+                                if success:
+                                    st.success(f"✅ Cache cleared for {user_to_refresh}")
+                                else:
+                                    st.error(f"Failed to clear cache for {user_to_refresh}")
+                            except Exception as e:
+                                st.error(f"Error clearing cache: {str(e)}")
+                    else:
+                        st.info("No valid user emails found")
                 else:
-                    st.error(f"Failed to clear cache for {user_to_refresh}")
-        else:
-            st.info("No users found in database")
+                    st.info("No users found in database")
+                    
+            except Exception as e:
+                st.error(f"Error getting users: {str(e)}")
+                st.info("Check the get_all_users() function")
+                
+    except Exception as e:
+        st.error(f"Error in cache management: {str(e)}")
+        st.info("Cache management temporarily disabled")
     # === END CACHE MANAGEMENT ===
     
     # Database operations
@@ -752,22 +775,25 @@ def show_development_tools():
     
     with col1:
         if st.button("Export Database", use_container_width=True):
-            from utils.auth import load_users
-            import json
-            
-            users = load_users()
-            # Remove passwords for security
-            for email in users:
-                if 'password' in users[email]:
-                    users[email]['password'] = '***HIDDEN***'
-            
-            db_json = json.dumps(users, indent=2, default=str)
-            st.download_button(
-                label="Download Database JSON",
-                data=db_json,
-                file_name="users_database.json",
-                mime="application/json"
-            )
+            try:
+                from utils.auth import load_users
+                import json
+                
+                users = load_users()
+                # Remove passwords for security
+                for email in users:
+                    if 'password' in users[email]:
+                        users[email]['password'] = '***HIDDEN***'
+                
+                db_json = json.dumps(users, indent=2, default=str)
+                st.download_button(
+                    label="Download Database JSON",
+                    data=db_json,
+                    file_name="users_database.json",
+                    mime="application/json"
+                )
+            except Exception as e:
+                st.error(f"Error exporting database: {str(e)}")
     
     with col2:
         if st.button("Import Database", use_container_width=True):
@@ -776,15 +802,19 @@ def show_development_tools():
     # System info
     st.markdown("---")
     with st.expander("System Information"):
-        import sys
-        import platform
-        
-        st.write("Python Version:", sys.version.split()[0])
-        st.write("Platform:", platform.platform())
-        st.write("Streamlit Version:", st.__version__)
-        
         try:
-            import pandas as pd
-            st.write("Pandas Version:", pd.__version__)
-        except:
-            pass
+            import sys
+            import platform
+            
+            st.write("Python Version:", sys.version.split()[0])
+            st.write("Platform:", platform.platform())
+            st.write("Streamlit Version:", st.__version__)
+            
+            try:
+                import pandas as pd
+                st.write("Pandas Version:", pd.__version__)
+            except:
+                st.write("Pandas: Not available")
+                
+        except Exception as e:
+            st.error(f"Error getting system info: {str(e)}")

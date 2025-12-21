@@ -403,22 +403,28 @@ def refresh_current_user_session():
     return False
 
 def clear_user_cache(email):
-    """Clear cache for a specific user - call this when user data changes"""
+    """Clear cache for a specific user"""
     import streamlit as st
     
-    # Clear from session cache
-    if 'user_cache' in st.session_state and email in st.session_state.user_cache:
-        del st.session_state.user_cache[email]
-    
-    # Clear from gsheets_db cache if exists
     try:
-        if hasattr(gsheets_db, 'user_cache') and email in gsheets_db.user_cache:
-            del gsheets_db.user_cache[email]
-    except:
-        pass
-    
-    # Invalidate cached queries that include this user
-    st.cache_data.clear()
+        # Clear from session cache
+        if 'user_cache' in st.session_state and email in st.session_state.user_cache:
+            del st.session_state.user_cache[email]
+        
+        # Clear from gsheets_db cache if exists
+        try:
+            if hasattr(gsheets_db, 'user_cache') and email in gsheets_db.user_cache:
+                del gsheets_db.user_cache[email]
+        except:
+            pass
+        
+        # Also clear cached queries
+        st.cache_data.clear()
+        
+        return True
+    except Exception as e:
+        print(f"Error clearing cache for {email}: {str(e)}")
+        return False
 
 def delete_user(email):
     """Delete user (admin only) - Now deletes from Google Sheets"""

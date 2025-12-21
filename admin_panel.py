@@ -53,7 +53,7 @@ def show_admin_panel():
         show_user_management(df_users)
     
     with tab2:
-        show_analytics_dashboard(df_users)
+        show_analytics_dashboard(users)
     
     with tab3:
         show_quick_actions()
@@ -166,13 +166,13 @@ def show_user_management(df_users):
                         st.success(f"Deleted user {selected_email}")
                         st.rerun()
 
-def show_analytics_dashboard(df_users):
+def show_analytics_dashboard(users):
     """Analytics and reporting"""
     
     st.subheader("Analytics Dashboard")
     
     # Convert to DataFrame for analysis
-    df = pd.DataFrame(df_users)
+    df = pd.DataFrame(users)
     
     # Tier distribution
     col1, col2 = st.columns(2)
@@ -216,7 +216,7 @@ def show_analytics_dashboard(df_users):
     
     with col2:
         if st.button("Generate Report", use_container_width=True):
-            report = generate_admin_report(df_users)
+            report = generate_admin_report(users)
             st.download_button(
                 label="Download Report",
                 data=report,

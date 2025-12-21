@@ -1155,7 +1155,7 @@ with tab4:
         st.info("Please organize your data in the Organize tab first")
 
 # Add to your tab definitions at the top of main content
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Input", "Detect", "Organize", "Export", "Impute"])
+#tab1, tab2, tab3, tab4, tab5 = st.tabs(["Input", "Detect", "Organize", "Export", "Impute"])
 
 # TAB 5: IMPUTE
 with tab5:
@@ -1486,7 +1486,7 @@ with tab5:
                                 st.session_state.df = df_processed
                                 
                                 # Show results
-                                st.success("✅ Actions applied successfully!")
+                                st.success("Actions applied successfully!")
                                 st.markdown("### Results Summary")
                                 for result in results:
                                     st.write(f"• {result}")

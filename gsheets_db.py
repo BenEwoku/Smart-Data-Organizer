@@ -20,7 +20,8 @@ def get_gsheets_client():
             "type": st.secrets["gsheets"]["type"],
             "project_id": st.secrets["gsheets"]["project_id"],
             "private_key_id": st.secrets["gsheets"]["private_key_id"],
-            "private_key": st.secrets["gsheets"]["private_key"],
+            # Fix: Replace literal \n with actual newlines
+            "private_key": st.secrets["gsheets"]["private_key"].replace("\\n", "\n"),
             "client_email": st.secrets["gsheets"]["client_email"],
             "client_id": st.secrets["gsheets"]["client_id"],
             "auth_uri": st.secrets["gsheets"]["auth_uri"],
@@ -38,6 +39,10 @@ def get_gsheets_client():
         client = gspread.authorize(creds)
         return client
         
+    except KeyError as e:
+        st.error(f"Missing secret key: {str(e)}")
+        st.error("Please check your Streamlit Cloud secrets configuration.")
+        return None
     except Exception as e:
         st.error(f"Google Sheets connection failed: {str(e)}")
         return None

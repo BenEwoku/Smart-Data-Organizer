@@ -207,41 +207,50 @@ def detect_data_structure(df):
         
     Returns:
         tuple: (structure_type, date_column, entity_column)
-        structure_type: "Time Series", "Panel Data", "Cross-Sectional", "Email Data", or "General Data"
+        ALWAYS returns a valid tuple, never raises exception
     """
-    # First, check if it's email data
-    is_email, confidence_score, email_columns = detect_email_data(df)
-    
-    if is_email and confidence_score >= 60:
-        # This is likely email data
+    try:
+        # First, check if it's email data
+        is_email, confidence_score, email_columns = detect_email_data(df)
+        
+        if is_email and confidence_score >= 60:
+            # This is likely email data
+            date_col = detect_date_column(df)
+            # For email data, entity column could be 'From' or 'To'
+            entity_col = 'From' if 'From' in df.columns else 'To' if 'To' in df.columns else None
+            return "Email Data", date_col, entity_col
+        
+        # Original detection logic for non-email data
         date_col = detect_date_column(df)
-        # For email data, entity column could be 'From' or 'To'
-        entity_col = 'From' if 'From' in df.columns else 'To' if 'To' in df.columns else None
-        return "Email Data", date_col, entity_col
-    
-    # Original detection logic for non-email data
-    date_col = detect_date_column(df)
-    numeric_cols = detect_numeric_columns(df)
-    entity_col = detect_entity_column(df)
-    
-    # Decision logic
-    if date_col and len(numeric_cols) > 0:
-        # Has dates and numeric data
+        numeric_cols = detect_numeric_columns(df)
+        entity_col = detect_entity_column(df)
         
-        if entity_col:
-            # Multiple entities over time = Panel Data
-            return "Panel Data", date_col, entity_col
-        else:
-            # Single entity over time = Time Series
-            return "Time Series", date_col, None
+        # Decision logic
+        if date_col and len(numeric_cols) > 0:
+            # Has dates and numeric data
             
-    elif not date_col or all_dates_same(df, date_col):
-        # No date column or all dates are the same = Cross-Sectional
-        return "Cross-Sectional", None, None
-        
-    else:
-        # Everything else
+            if entity_col:
+                # Multiple entities over time = Panel Data
+                return "Panel Data", date_col, entity_col
+            else:
+                # Single entity over time = Time Series
+                return "Time Series", date_col, None
+                
+        elif not date_col or all_dates_same(df, date_col):
+            # No date column or all dates are the same = Cross-Sectional
+            return "Cross-Sectional", None, None
+            
+        else:
+            # Everything else
+            return "General Data", None, None
+            
+    except Exception as e:
+        # CRITICAL: Always return a valid tuple even if detection fails
+        print(f"⚠️ Detection error: {str(e)}")
         return "General Data", None, None
+    
+    # Safety fallback (should never reach here)
+    return "General Data", None, None
 
 def all_dates_same(df, date_col):
     """Check if all dates in a column are the same"""

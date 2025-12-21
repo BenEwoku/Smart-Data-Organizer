@@ -711,7 +711,7 @@ if page == "Admin Panel":
         st.markdown("# Admin Panel")
         st.error(f"Error: {type(e).__name__}")
         
-        if st.button("🔄 Clear Cache & Retry"):
+        if st.button("Clear Cache & Retry"):
             import streamlit as st
             st.cache_data.clear()
             st.rerun()
@@ -1403,9 +1403,26 @@ with tab2:
                 st.session_state.structure_detected = True
         else:
             st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Structure Detection</h3>', unsafe_allow_html=True)
-        
-        # Get structure from session state
-        structure, date_col, entity_col = st.session_state.data_structure
+
+        # ========== ADD VALIDATION HERE ==========
+        # Validate the detected structure
+        if st.session_state.data_structure is None:
+            st.error("Structure detection returned None. Using default values.")
+            st.session_state.data_structure = ("General Data", None, None)
+            structure, date_col, entity_col = ("General Data", None, None)
+        else:
+            try:
+                structure, date_col, entity_col = st.session_state.data_structure
+                # Additional validation
+                if not isinstance(structure, str) or structure not in ["Time Series", "Panel Data", "Cross-Sectional", "Email Data", "General Data"]:
+                    st.warning(f"Invalid structure type: {structure}. Using General Data.")
+                    st.session_state.data_structure = ("General Data", date_col, entity_col)
+                    structure = "General Data"
+            except (ValueError, TypeError) as e:
+                st.error(f"Invalid structure format: {str(e)}")
+                st.session_state.data_structure = ("General Data", None, None)
+                structure, date_col, entity_col = ("General Data", None, None)
+        # ========== END VALIDATION ==========
         
         col1, col2 = st.columns(2)
         
@@ -1762,26 +1779,43 @@ with tab2:
 
 # TAB 3: ORGANIZE
 # TAB 3: ORGANIZE
+# TAB 3: ORGANIZE
 with tab3:
     # SAFETY CHECK 1: Ensure data is loaded
-    if st.session_state.df is None:
+    if st.session_state.df is None or st.session_state.df.empty:
         st.warning("No data loaded. Please input data in the Input tab first.")
         st.stop()
     
-    # SAFETY CHECK 2: Ensure data structure exists (fix for PDF parsing failure)
-    if st.session_state.data_structure is None:
-        # Initialize with default values when PDF parsing fails
-        st.session_state.data_structure = ("General Data", None, None)
-        st.info("Data structure not detected. Using general organization mode.")
+    # Get the DataFrame
+    df = st.session_state.df
     
-    # Now safely proceed with your original logic
-    if st.session_state.df is not None and st.session_state.data_structure is not None:
-        st.markdown('<h2 class="subheader">Step 3: Organize & Refine Data</h2>', unsafe_allow_html=True)
-        
-        df = st.session_state.df
-
-        # Get structure from session state
+    # SAFETY CHECK 2: Ensure data structure exists AND is valid
+    if st.session_state.data_structure is None:
+        # Run detection now
+        st.warning("Data structure not detected. Running detection...")
+        try:
+            from utils.detection import detect_data_structure
+            structure, date_col, entity_col = detect_data_structure(df)
+            st.session_state.data_structure = (structure, date_col, entity_col)
+            st.success(f"Detected: {structure}")
+        except Exception as e:
+            st.error(f"Detection failed: {str(e)}")
+            # Set safe defaults
+            st.session_state.data_structure = ("General Data", None, None)
+    
+    # Now safely unpack with validation
+    try:
         structure, date_col, entity_col = st.session_state.data_structure
+        # Validate the unpacked values
+        if structure is None or not isinstance(structure, str):
+            raise ValueError("Invalid structure value")
+    except (ValueError, TypeError) as e:
+        st.error(f"Invalid data structure: {str(e)}")
+        # Reset to defaults
+        st.session_state.data_structure = ("General Data", None, None)
+        structure, date_col, entity_col = ("General Data", None, None)
+    
+    st.markdown('<h2 class="subheader">Step 3: Organize & Refine Data</h2>', unsafe_allow_html=True)
 
         # ADDITIONAL SAFETY CHECK: Verify DataFrame is valid
         if df.empty or len(df) == 0:

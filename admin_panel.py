@@ -140,33 +140,67 @@ def show_admin_panel():
     st.markdown("# Admin Panel")
     st.markdown("---")
     
-    # Admin stats
+    # Admin stats with error handling
     from utils.auth import get_all_users
-    users = get_all_users()
-    df_users = pd.DataFrame(users)
     
-    # Summary stats
+    try:
+        users = get_all_users()
+        
+        # Check if users is valid
+        if users is None:
+            st.error("Error: get_all_users() returned None")
+            users = []
+        elif not isinstance(users, list):
+            st.error(f"Error: get_all_users() returned {type(users)}, expected list")
+            users = []
+            
+    except Exception as e:
+        st.error(f"Error getting users: {str(e)}")
+        users = []
+    
+    # Create DataFrame safely
+    if users and len(users) > 0:
+        try:
+            df_users = pd.DataFrame(users)
+        except Exception as e:
+            st.error(f"Error creating DataFrame: {str(e)}")
+            st.write("Raw users data for debugging:", users)
+            df_users = pd.DataFrame()
+    else:
+        st.warning("No user data available")
+        df_users = pd.DataFrame()
+    
+    # Summary stats - only if we have users
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Total Users", len(users))
+        st.metric("Total Users", len(users) if users else 0)
     
     with col2:
-        paid_users = len([u for u in users if u['tier'] != 'free'])
-        st.metric("Paid Users", paid_users)
+        if users:
+            paid_users = len([u for u in users if u.get('tier', 'free') != 'free'])
+            st.metric("Paid Users", paid_users)
+        else:
+            st.metric("Paid Users", 0)
     
     with col3:
-        total_conversions = sum(u['conversions_used'] for u in users)
-        st.metric("Total Conversions", total_conversions)
+        if users:
+            total_conversions = sum(u.get('conversions_used', 0) for u in users)
+            st.metric("Total Conversions", total_conversions)
+        else:
+            st.metric("Total Conversions", 0)
     
     with col4:
-        today = datetime.now().strftime('%Y-%m-%d')
-        new_today = len([u for u in users if u.get('created_at', '').startswith(today)])
-        st.metric("New Today", new_today)
+        if users:
+            today = datetime.now().strftime('%Y-%m-%d')
+            new_today = len([u for u in users if str(u.get('created_at', '')).startswith(today)])
+            st.metric("New Today", new_today)
+        else:
+            st.metric("New Today", 0)
     
     st.markdown("---")
     
-    # Main admin tabs
+    # Main admin tabs - with safe DataFrame passing
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "User Management",
         "Admin Management", 
@@ -177,10 +211,11 @@ def show_admin_panel():
     ])
     
     with tab1:
+        # Pass the DataFrame safely
         show_user_management(df_users)
 
     with tab2:
-        show_admin_management()  # NEW FUNCTION
+        show_admin_management()
     
     with tab3:
         show_analytics_dashboard(users)
@@ -199,6 +234,11 @@ def show_user_management(df_users):
     
     st.subheader("User Management")
     
+    # Check if df_users is valid
+    if df_users is None or len(df_users) == 0:
+        st.warning("No user data available")
+        return  # Exit early if no data
+    
     # Search and filter
     col1, col2, col3 = st.columns(3)
     
@@ -206,104 +246,117 @@ def show_user_management(df_users):
         search_email = st.text_input("Search by email", placeholder="user@example.com")
     
     with col2:
-        filter_tier = st.selectbox("Filter by tier", ["All", "free", "pro", "analyst", "business"])
+        # Check if 'tier' column exists
+        if 'tier' in df_users.columns:
+            filter_tier = st.selectbox("Filter by tier", ["All", "free", "pro", "analyst", "business"])
+        else:
+            filter_tier = "All"
+            st.info("No tier data available")
     
     with col3:
-        sort_by = st.selectbox("Sort by", ["Email", "Tier", "Conversions", "Created"])
+        # Check available columns
+        available_columns = df_users.columns.tolist()
+        sort_options = ["Email" if 'email' in available_columns else "Index"]
+        
+        if 'tier' in available_columns:
+            sort_options.append("Tier")
+        if 'conversions_used' in available_columns:
+            sort_options.append("Conversions")
+        if 'created_at' in available_columns:
+            sort_options.append("Created")
+        
+        sort_by = st.selectbox("Sort by", sort_options)
     
-    # Apply filters
+    # Apply filters - with safety checks
     filtered_df = df_users.copy()
     
-    if search_email:
+    if search_email and 'email' in filtered_df.columns:
         filtered_df = filtered_df[filtered_df['email'].str.contains(search_email, case=False, na=False)]
     
-    if filter_tier != "All":
+    if filter_tier != "All" and 'tier' in filtered_df.columns:
         filtered_df = filtered_df[filtered_df['tier'] == filter_tier]
     
-    # Sort
-    if sort_by == "Email":
+    # Sort with safety checks
+    if sort_by == "Email" and 'email' in filtered_df.columns:
         filtered_df = filtered_df.sort_values('email')
-    elif sort_by == "Tier":
+    elif sort_by == "Tier" and 'tier' in filtered_df.columns:
         filtered_df = filtered_df.sort_values('tier')
-    elif sort_by == "Conversions":
+    elif sort_by == "Conversions" and 'conversions_used' in filtered_df.columns:
         filtered_df = filtered_df.sort_values('conversions_used', ascending=False)
-    elif sort_by == "Created":
+    elif sort_by == "Created" and 'created_at' in filtered_df.columns:
         filtered_df = filtered_df.sort_values('created_at', ascending=False)
     
-    # Display user table
-    st.dataframe(
-        filtered_df,
-        use_container_width=True,
-        column_config={
-            "email": "Email",
-            "name": "Name",
-            "tier": "Tier",
-            "conversions_used": "Conversions Used",
-            "created_at": "Created At",
-            "last_login": "Last Login"
-        },
-        height=400
-    )
+    # Display user table - only if we have data
+    if len(filtered_df) > 0:
+        st.dataframe(
+            filtered_df,
+            use_container_width=True,
+            column_config={
+                "email": "Email",
+                "name": "Name",
+                "tier": "Tier",
+                "conversions_used": "Conversions Used",
+                "created_at": "Created At",
+                "last_login": "Last Login"
+            },
+            height=400
+        )
+    else:
+        st.info("No users match your filters")
     
-    # User actions
-    st.subheader("User Actions")
-    
-    selected_email = st.selectbox(
-        "Select user to manage:",
-        filtered_df['email'].tolist(),
-        key="user_select"
-    )
-    
-    if selected_email:
-        from utils.auth import get_all_users
-        all_users = get_all_users()
-        user_data = next((u for u in all_users if u['email'] == selected_email), None)
+    # User actions - only if we have users
+    if len(filtered_df) > 0:
+        st.subheader("User Actions")
         
-        if user_data:
-            col1, col2, col3, col4 = st.columns(4)
+        selected_email = st.selectbox(
+            "Select user to manage:",
+            filtered_df['email'].tolist(),
+            key="user_select"
+        )
+        
+        if selected_email:
+            from utils.auth import get_all_users
+            all_users = get_all_users()
+            user_data = next((u for u in all_users if u['email'] == selected_email), None)
             
-            with col1:
-                st.write("Current Tier:")
-                st.info(user_data['tier'].upper())
-            
-            with col2:
-                new_tier = st.selectbox(
-                    "Change tier:",
-                    ["free", "pro", "analyst", "business"],
-                    key=f"tier_{selected_email}"
-                )
-
-                # In show_user_management() function, where you update tier:
-                if st.button("Update Tier", key=f"update_tier_{selected_email}"):
-                    from utils.auth import update_user
-                    
-                    # Clear cache first
-                    import streamlit as st
-                    st.cache_data.clear()
-                    
-                    if update_user(selected_email, {'tier': new_tier}):
-                        st.success(f"Updated {selected_email} to {new_tier} tier")
-                        
-                        # Force immediate refresh
-                        st.balloons()
-                        st.rerun()  # This forces the page to reload
-            
-            with col3:
-                st.write("Conversions:")
-                st.metric("Used", user_data['conversions_used'])
+            if user_data:
+                col1, col2, col3, col4 = st.columns(4)
                 
-                if st.button("Reset Count", key=f"reset_{selected_email}"):
-                    from utils.auth import reset_user_conversions
-                    if reset_user_conversions(selected_email):
-                        st.success(f"Reset conversions for {selected_email}")
-                        st.rerun()
-            
-            with col4:
-                if st.button("Delete User", type="secondary", key=f"delete_{selected_email}"):
-                    from utils.auth import delete_user
-                    if delete_user(selected_email):
-                        st.success(f"Deleted user {selected_email}")
-                        st.rerun()
+                with col1:
+                    st.write("Current Tier:")
+                    st.info(user_data.get('tier', 'free').upper())
+                
+                with col2:
+                    new_tier = st.selectbox(
+                        "Change tier:",
+                        ["free", "pro", "analyst", "business"],
+                        key=f"tier_{selected_email}"
+                    )
+                    
+                    if st.button("Update Tier", key=f"update_tier_{selected_email}"):
+                        from utils.auth import update_user
+                        if update_user(selected_email, {'tier': new_tier}):
+                            st.success(f"Updated {selected_email} to {new_tier} tier")
+                            st.rerun()
+                
+                with col3:
+                    st.write("Conversions:")
+                    st.metric("Used", user_data.get('conversions_used', 0))
+                    
+                    if st.button("Reset Count", key=f"reset_{selected_email}"):
+                        from utils.auth import reset_user_conversions
+                        if reset_user_conversions(selected_email):
+                            st.success(f"Reset conversions for {selected_email}")
+                            st.rerun()
+                
+                with col4:
+                    if st.button("Delete User", type="secondary", key=f"delete_{selected_email}"):
+                        from utils.auth import delete_user
+                        if delete_user(selected_email):
+                            st.success(f"Deleted user {selected_email}")
+                            st.rerun()
+    else:
+        st.info("No users available for actions")
 
 def show_analytics_dashboard(users):
     """Analytics and reporting"""

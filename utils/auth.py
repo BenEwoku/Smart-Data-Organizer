@@ -313,6 +313,10 @@ def get_all_users():
     """Get all users (admin only) - Now from Google Sheets"""
     # Try to get from Google Sheets first
     sheet_users = gsheets_db.get_all_users_from_sheet()
+    
+    # DEBUG: Add this line to see what's returned
+    print(f"DEBUG: sheet_users = {sheet_users}")
+    
     if sheet_users:
         # Fix is_admin values from strings to booleans
         for user in sheet_users:
@@ -334,7 +338,7 @@ def get_all_users():
             'conversions_used': user_data.get('conversions_used', 0),
             'created_at': user_data['created_at'],
             'last_login': user_data.get('last_login', 'Never'),
-            'is_admin': user_data.get('is_admin', False)  # Add is_admin
+            'is_admin': user_data.get('is_admin', False)
         })
     
     return user_list

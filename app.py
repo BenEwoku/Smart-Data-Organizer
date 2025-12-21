@@ -1,4 +1,3 @@
-# File: app.py (Main Entry Point - Phase 2)
 """
 Smart Data Organizer - Phase 2 with Authentication & Payments
 Entry Point: streamlit run app.py
@@ -13,9 +12,10 @@ from utils.organization import organize_time_series, organize_panel_data, organi
 from utils.export import export_to_csv, export_to_excel
 from utils.auth import (
     show_login_page, is_logged_in, get_current_user, 
-    show_user_sidebar, can_convert, increment_conversion_count
+    show_user_sidebar, can_convert, increment_conversion_count, is_admin
 )
 from utils.payment import show_pricing_page, show_billing_portal
+from admin_panel import show_admin_panel
 
 # Page configuration
 st.set_page_config(
@@ -35,6 +35,14 @@ st.markdown("""
     }
     .stDownloadButton button {
         width: 100%;
+    }
+    .admin-badge {
+        background-color: #ff4b4b;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: bold;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -64,17 +72,27 @@ show_user_sidebar()
 # Navigation
 st.sidebar.markdown("---")
 st.sidebar.header("Navigation")
+
+# Show admin option if user is admin
+if is_admin(st.session_state.user_email):
+    page_options = ["Home", "Admin Panel", "Pricing", "Billing"]
+    st.sidebar.markdown('<div class="admin-badge">ADMIN</div>', unsafe_allow_html=True)
+else:
+    page_options = ["Home", "Pricing", "Billing"]
+
 page = st.sidebar.radio(
     "Go to:",
-    ["Home", "Pricing", "Billing"],
+    page_options,
     label_visibility="collapsed"
 )
 
 # Handle different pages
-if page == "Pricing":
+if page == "Admin Panel" and is_admin(st.session_state.user_email):
+    show_admin_panel()
+    st.stop()
+elif page == "Pricing":
     show_pricing_page()
     st.stop()
-
 elif page == "Billing":
     show_billing_portal()
     st.stop()
@@ -99,6 +117,28 @@ if not can_convert(user):
         st.rerun()
     
     st.stop()
+
+# Add demo button for admin
+if is_admin(st.session_state.user_email):
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🚀 Load Demo Data", use_container_width=True, type="secondary"):
+        sample_data = """Date,Sales,Region,Product
+2024-01-01,1500,North,Widget A
+2024-01-01,2300,South,Widget B
+2024-01-02,1800,North,Widget A
+2024-01-02,2100,South,Widget B
+2024-01-03,1200,North,Widget A
+2024-01-03,1900,South,Widget B
+2024-01-04,2100,North,Widget A
+2024-01-04,1800,South,Widget B
+2024-01-05,1700,North,Widget A
+2024-01-05,2200,South,Widget B"""
+        
+        df_raw = parse_text_to_dataframe(sample_data)
+        if df_raw is not None:
+            st.session_state.df = df_raw
+            st.success("Demo data loaded successfully!")
+            st.rerun()
 
 # Sidebar - Input method
 with st.sidebar:
@@ -130,6 +170,17 @@ with tab1:
             label_visibility="collapsed"
         )
         
+        # Live preview for large inputs
+        if text_input and len(text_input) > 50:
+            with st.expander("🔍 Live Preview", expanded=False):
+                try:
+                    preview_df = parse_text_to_dataframe(text_input[:5000])
+                    if preview_df is not None:
+                        st.dataframe(preview_df.head(5))
+                        st.caption(f"Preview showing 5 of {len(preview_df)} rows")
+                except:
+                    st.info("Preview not available for this format")
+        
         col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
             process_btn = st.button("Process Text", type="primary", use_container_width=True)
@@ -157,7 +208,7 @@ with tab1:
         
         url_input = st.text_input(
             "Website URL:",
-            placeholder="https://example.com/data-page",
+            placeholder="https://example.com/data-page ",
             label_visibility="collapsed"
         )
         
@@ -413,6 +464,6 @@ with tab4:
 st.markdown("---")
 st.markdown("""
     <div style='text-align: center; color: gray;'>
-        <p>Smart Data Organizer v2.0 | Built with Streamlit | Phase 2 with Auth & Payments</p>
+        <p>Smart Data Organizer v2.1 | Built with Streamlit | Admin Mode Enabled</p>
     </div>
 """, unsafe_allow_html=True)

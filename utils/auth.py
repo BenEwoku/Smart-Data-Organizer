@@ -1,4 +1,3 @@
-# File: utils/auth.py
 """
 User authentication and session management
 """
@@ -8,8 +7,8 @@ import json
 import hashlib
 from datetime import datetime
 
-# Simple file-based user storage (for MVP)
-# In production, use a proper database
+# Admin emails - Add your email here
+ADMIN_EMAILS = ['admin@smartdata.com', 'your-email@example.com']  # CHANGE THIS TO YOUR EMAIL
 
 def hash_password(password):
     """Hash password using SHA-256"""
@@ -20,13 +19,23 @@ def load_users():
     if 'users_db' not in st.session_state:
         # Initialize with default users for testing
         st.session_state.users_db = {
+            'admin@smartdata.com': {
+                'password': hash_password('admin123'),
+                'name': 'System Admin',
+                'tier': 'business',
+                'created_at': datetime.now().isoformat(),
+                'conversions_used': 0,
+                'last_reset': datetime.now().isoformat(),
+                'last_login': datetime.now().isoformat()
+            },
             'demo@example.com': {
                 'password': hash_password('demo123'),
                 'name': 'Demo User',
                 'tier': 'free',
                 'created_at': datetime.now().isoformat(),
                 'conversions_used': 0,
-                'last_reset': datetime.now().isoformat()
+                'last_reset': datetime.now().isoformat(),
+                'last_login': datetime.now().isoformat()
             }
         }
     return st.session_state.users_db
@@ -44,7 +53,8 @@ def save_user(email, password, name):
         'tier': 'free',
         'created_at': datetime.now().isoformat(),
         'conversions_used': 0,
-        'last_reset': datetime.now().isoformat()
+        'last_reset': datetime.now().isoformat(),
+        'last_login': datetime.now().isoformat()
     }
     
     st.session_state.users_db = users
@@ -60,6 +70,10 @@ def verify_login(email, password):
     if users[email]['password'] != hash_password(password):
         return False, "Incorrect password"
     
+    # Update last login time
+    users[email]['last_login'] = datetime.now().isoformat()
+    st.session_state.users_db = users
+    
     return True, "Login successful"
 
 def login_user(email):
@@ -68,12 +82,14 @@ def login_user(email):
     st.session_state.logged_in = True
     st.session_state.user_email = email
     st.session_state.user_data = users[email]
+    st.session_state.is_admin = is_admin(email)
 
 def logout_user():
     """Log out current user"""
     st.session_state.logged_in = False
     st.session_state.user_email = None
     st.session_state.user_data = None
+    st.session_state.is_admin = False
 
 def is_logged_in():
     """Check if user is logged in"""
@@ -85,6 +101,28 @@ def get_current_user():
         return st.session_state.get('user_data')
     return None
 
+def is_admin(user_email):
+    """Check if user is admin"""
+    return user_email in ADMIN_EMAILS
+
+def get_all_users():
+    """Get all users (admin only)"""
+    users = load_users()
+    
+    # Convert to list for display
+    user_list = []
+    for email, user_data in users.items():
+        user_list.append({
+            'email': email,
+            'name': user_data['name'],
+            'tier': user_data['tier'],
+            'conversions_used': user_data.get('conversions_used', 0),
+            'created_at': user_data['created_at'],
+            'last_login': user_data.get('last_login', 'Never')
+        })
+    
+    return user_list
+
 def update_user_tier(email, new_tier):
     """Update user's subscription tier"""
     users = load_users()
@@ -95,6 +133,38 @@ def update_user_tier(email, new_tier):
         # Update current session if it's the logged-in user
         if st.session_state.get('user_email') == email:
             st.session_state.user_data['tier'] = new_tier
+
+def update_user(email, updates):
+    """Update user data (admin only)"""
+    users = load_users()
+    
+    if email in users:
+        users[email].update(updates)
+        st.session_state.users_db = users
+        
+        # Update current session if it's the logged-in user
+        if st.session_state.get('user_email') == email:
+            st.session_state.user_data.update(updates)
+        
+        return True
+    return False
+
+def delete_user(email):
+    """Delete user (admin only)"""
+    users = load_users()
+    
+    if email in users and email not in ADMIN_EMAILS:  # Don't delete admins
+        del users[email]
+        st.session_state.users_db = users
+        return True
+    return False
+
+def reset_user_conversions(email):
+    """Reset user's conversion count (admin only)"""
+    return update_user(email, {
+        'conversions_used': 0,
+        'last_reset': datetime.now().isoformat()
+    })
 
 def increment_conversion_count(email):
     """Increment user's conversion count"""
@@ -110,12 +180,12 @@ def increment_conversion_count(email):
 def get_conversion_limit(tier):
     """Get conversion limit based on tier"""
     limits = {
-        'free': 100,
+        'free': 50,  # Increased for development
         'pro': float('inf'),
         'analyst': float('inf'),
         'business': float('inf')
     }
-    return limits.get(tier, 100)
+    return limits.get(tier, 50)
 
 def can_convert(user_data):
     """Check if user can perform a conversion"""
@@ -168,6 +238,10 @@ def show_login_page():
             **Demo Credentials:**
             - Email: demo@example.com
             - Password: demo123
+            
+            **Admin Credentials:**
+            - Email: admin@smartdata.com
+            - Password: admin123
             """)
     
     with tab2:

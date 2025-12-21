@@ -355,9 +355,9 @@ elif page == "Billing":
     st.stop()
 
 # Main Home Page
-# Main Home Page - Replace line ~100 in your app.py
-st.markdown('<p class="main-header">Smart Data Organizer</p>', unsafe_allow_html=True)
-st.markdown("<div style='font-size: 1.3rem; text-align: left;'>Transform messy data into clean, organized tables with intelligent structure detection</div>", unsafe_allow_html=True)
+# Main Home Page
+st.markdown('<h1 class="main-header">Smart Data Organizer</h1>', unsafe_allow_html=True)
+st.markdown('<p class="main-subtitle">Transform messy data into clean, organized tables with intelligent structure detection</p>', unsafe_allow_html=True)
 st.markdown("---")
 
 # Check if user can perform conversions

@@ -110,12 +110,12 @@ def increment_conversion_count(email):
 def get_conversion_limit(tier):
     """Get conversion limit based on tier"""
     limits = {
-        'free': 5,
+        'free': 100,
         'pro': float('inf'),
         'analyst': float('inf'),
         'business': float('inf')
     }
-    return limits.get(tier, 5)
+    return limits.get(tier, 100)
 
 def can_convert(user_data):
     """Check if user can perform a conversion"""

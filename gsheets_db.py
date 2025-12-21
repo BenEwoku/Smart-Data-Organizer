@@ -41,14 +41,13 @@ def get_gsheets_client():
         
     except KeyError as e:
         st.error(f"Missing secret key: {str(e)}")
-        st.error("Please check your Streamlit Cloud secrets configuration.")
         return None
     except Exception as e:
         st.error(f"Google Sheets connection failed: {str(e)}")
         return None
 
 def get_or_create_sheet(sheet_name="SmartDataOrganizer_Users"):
-    """Get or create Google Sheet"""
+    """Get existing Google Sheet (must be created manually first)"""
     client = get_gsheets_client()
     if not client:
         return None
@@ -56,30 +55,40 @@ def get_or_create_sheet(sheet_name="SmartDataOrganizer_Users"):
     try:
         # Try to open existing sheet
         spreadsheet = client.open(sheet_name)
-    except gspread.SpreadsheetNotFound:
-        # Create new spreadsheet
-        spreadsheet = client.create(sheet_name)
-        
-        # Share with service account for access
-        spreadsheet.share(st.secrets["gsheets"]["client_email"], perm_type='user', role='writer')
-        
-        # Get the first worksheet
         worksheet = spreadsheet.sheet1
         
-        # Add headers
-        worksheet.update('A1:H1', [[
-            'email', 'password_hash', 'name', 'tier', 
-            'conversions_used', 'created_at', 'last_login', 'last_reset'
-        ]])
+        # Verify headers exist
+        headers = worksheet.row_values(1)
+        expected_headers = ['email', 'password_hash', 'name', 'tier', 
+                          'conversions_used', 'created_at', 'last_login', 'last_reset']
         
-        # Format headers
-        worksheet.format('A1:H1', {
-            'backgroundColor': {'red': 0.2, 'green': 0.2, 'blue': 0.2},
-            'horizontalAlignment': 'CENTER',
-            'textFormat': {'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0}, 'bold': True}
-        })
-    
-    return spreadsheet.sheet1
+        if not headers or headers != expected_headers:
+            # Headers missing or incorrect - set them up
+            worksheet.update('A1:H1', [expected_headers])
+            
+            # Format headers
+            worksheet.format('A1:H1', {
+                'backgroundColor': {'red': 0.2, 'green': 0.2, 'blue': 0.2},
+                'horizontalAlignment': 'CENTER',
+                'textFormat': {'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0}, 'bold': True}
+            })
+        
+        return worksheet
+        
+    except gspread.SpreadsheetNotFound:
+        st.error(f"""
+        ❌ **Google Sheet Not Found**
+        
+        Please create a sheet manually:
+        1. Go to Google Sheets
+        2. Create a new sheet named: **{sheet_name}**
+        3. Share it with: `{st.secrets["gsheets"]["client_email"]}`
+        4. Refresh this page
+        """)
+        return None
+    except Exception as e:
+        st.error(f"Error accessing sheet: {str(e)}")
+        return None
 
 def sheet_exists():
     """Check if the sheet exists"""

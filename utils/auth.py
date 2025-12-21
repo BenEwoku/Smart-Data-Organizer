@@ -20,6 +20,53 @@ def hash_password(password):
     """Hash password using SHA-256"""
     return hashlib.sha256(password.encode()).hexdigest()
 
+def initialize_demo_accounts():
+    """Initialize database with demo accounts"""
+    demo_users = [
+        {
+            "email": "demo@example.com",
+            "password": "demo123",
+            "name": "Demo User",
+            "tier": "free"
+        },
+        {
+            "email": "admin@smartdata.com",
+            "password": "admin123",
+            "name": "Admin User",
+            "tier": "pro"
+        }
+    ]
+    
+    # Add your email as admin too
+    try:
+        admin_email = st.secrets["admin"]["admin_email"]
+        demo_users.append({
+            "email": admin_email,
+            "password": "admin123",
+            "name": "Admin",
+            "tier": "pro"
+        })
+    except:
+        pass
+    
+    added = 0
+    for user in demo_users:
+        # Check if user exists
+        existing = gsheets_db.get_user_from_sheet(user["email"])
+        
+        if not existing:
+            # Add user
+            success = gsheets_db.add_user_to_sheet(
+                email=user["email"],
+                password_hash=hash_password(user["password"]),
+                name=user["name"],
+                tier=user["tier"]
+            )
+            if success:
+                added += 1
+    
+    return added
+
 def load_users():
     """Load users from session state (for backward compatibility)"""
     if 'users_db' not in st.session_state:
@@ -285,17 +332,45 @@ def show_login_page():
     
     if not sheets_connected:
         st.warning("""
-        **⚠️ DEVELOPMENT MODE**
+        **⚠️ DATABASE NOT INITIALIZED**
         
-        User accounts are stored in temporary session storage.
-        
-        **Accounts will be lost when:**
-        - You refresh the page
-        - Session expires (24 hours)
-        - App restarts
-        
-        For persistent accounts, ensure Google Sheets is properly configured.
+        The Google Sheet database needs to be set up with demo accounts.
         """)
+        
+        # Add initialization button
+        if st.button("🔧 Initialize Database (Click Once)", type="primary", use_container_width=True):
+            with st.spinner("Creating database and demo accounts..."):
+                # Create the sheet
+                worksheet = gsheets_db.get_or_create_sheet()
+                
+                if worksheet:
+                    # Add demo accounts
+                    added = initialize_demo_accounts()
+                    
+                    if added > 0:
+                        st.success(f"""
+                        ✅ **Database Initialized Successfully!**
+                        
+                        {added} demo accounts created.
+                        
+                        **You can now login with:**
+                        - Email: demo@example.com
+                        - Password: demo123
+                        
+                        **OR**
+                        
+                        - Email: admin@smartdata.com  
+                        - Password: admin123
+                        
+                        Please refresh the page or click Login below.
+                        """)
+                        st.balloons()
+                    else:
+                        st.info("Database already has accounts. You can login below.")
+                else:
+                    st.error("Failed to create database. Please check your Google Sheets configuration.")
+        
+        st.markdown("---")
     
     st.markdown("## Welcome to Smart Data Organizer")
     
@@ -316,7 +391,7 @@ def show_login_page():
                         login_user(email)
                         st.success(message)
                         if sheets_connected:
-                            st.info("Connected to persistent database")
+                            st.info("✅ Connected to persistent database")
                         st.rerun()
                     else:
                         st.error(message)
@@ -324,17 +399,17 @@ def show_login_page():
                     st.warning("Please enter email and password")
         
         # Demo credentials hint
-        with st.expander("Try Demo Account"):
+        with st.expander("📝 Demo Credentials"):
             st.info("""
-            **Demo Credentials:**
+            **Demo Account:**
             - Email: demo@example.com
             - Password: demo123
             
-            **Admin Credentials:**
+            **Admin Account:**
             - Email: admin@smartdata.com
             - Password: admin123
             
-            **Note:** These accounts are pre-loaded in the database.
+            If you don't see these accounts, click "Initialize Database" above.
             """)
     
     with tab2:
@@ -363,7 +438,7 @@ def show_login_page():
                     success, message = save_user(email, password, name)
                     if success:
                         if sheets_connected:
-                            st.success(f"{message} (Saved to database)")
+                            st.success(f"{message} ✅ Saved to database")
                         else:
                             st.success(f"{message} (Local session only)")
                     else:
@@ -383,7 +458,7 @@ def show_user_sidebar():
         if sheets_connected and st.session_state.user_email:
             sheet_user = gsheets_db.get_user_from_sheet(st.session_state.user_email)
             if sheet_user:
-                st.sidebar.caption("✓ Persistent account")
+                st.sidebar.caption("✅ Persistent account")
         
         # Tier badge
         tier = user['tier'].upper()

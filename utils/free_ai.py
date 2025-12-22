@@ -21,10 +21,10 @@ class FreeAIEngine:
         
         # Fallback models (free tier - prioritize smaller models)
         self.models = [
-            "google/flan-t5-small",      # Lightweight, good for extraction/summarization
-            "facebook/bart-large-cnn",   # Excellent for summarization
-            "t5-small",                  # Very lightweight alternative
-            "sshleifer/distilbart-cnn-12-6"  # Fast summarization
+            "facebook/mbart-large-50-many-to-many-mmt",  # Best for translation (Chinese→English)
+            "google/flan-t5-small",                      # Good for extraction/summarization
+            "t5-small",                                  # Lightweight
+            "sshleifer/distilbart-cnn-12-6"              # Summarization
         ]
         
         self.current_model = 0
@@ -134,11 +134,12 @@ JSON:""",
 
 Summary:""",
             
-            "translate": f"""Translate this text to English:
+            "translate": f"""Translate this text to English. If the text is already in English, return it as is.
 
+Text:
 {text}
 
-Translation:""",
+Translation in English:""",
             
             "insights": f"""Analyze this data and provide 3 key insights:
 
@@ -210,13 +211,14 @@ Insights:"""
         
         elif task == "translate":
             # Return original text as translation (no actual translation)
+            # You can add a placeholder or use langdetect here
             return {
                 "success": True,
                 "provider": "local_fallback",
                 "model": "passthrough",
                 "processing_time": time.time() - start_time,
-                "content": text,
-                "data": {"text": text}
+                "content": f"[TRANSLATION NOT AVAILABLE LOCALLY]\n\nOriginal text:\n{text}",
+                "data": {"text": f"[TRANSLATION NOT AVAILABLE LOCALLY]\n\nOriginal text:\n{text}"}
             }
         
         elif task == "insights":

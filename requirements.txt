@@ -36,9 +36,8 @@ pytest>=7.4.0
 scipy>=1.10.0
 scikit-learn>=1.3.0
 
-# Phase 2: Payment processing (optional - for production)
-# stripe>=5.5.0
+# For language detection (optional but recommended for translation)
+langdetect>=1.0.9
 
-# Phase 2: Database (optional - for production)
-# sqlalchemy>=2.0.0
-# psycopg2-binary>=2.9.0  # For PostgreSQL or MySQL
+# For better text processing
+regex>=2023.0

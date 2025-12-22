@@ -1830,7 +1830,7 @@ with tab2:
                                 with col_stats3:
                                     st.metric("Max Score", f"{scores_df['spam_score'].max():.1f}")
                 else:
-                    st.success("✅ No spam detected in your email collection!")
+                    st.success("No spam detected in your email collection!")
                     
                     # Show spam prevention tips
                     with st.expander("Spam Prevention Tips", expanded=False):
@@ -2762,7 +2762,7 @@ with tab5:
                             
                             with col3:
                                 # Preview button
-                                if st.button("🔍 Preview", key=f"preview_action_{col}"):
+                                if st.button("Preview", key=f"preview_action_{col}"):
                                     st.info(f"Preview for {col}: {action}")
                             
                             # Store custom values if needed

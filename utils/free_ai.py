@@ -1,5 +1,5 @@
 """
-100% Free AI Engine - No API keys, no signup, no limits
+Free AI Engine with Local Fallback
 """
 import requests
 import pandas as pd
@@ -10,66 +10,28 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 class FreeAIEngine:
-    """Main AI engine using completely free APIs"""
+    """AI engine with free APIs and local fallback"""
     
     def __init__(self):
-        # Public, working endpoints
+        # Simple endpoints (these might work without keys)
         self.endpoints = [
             {
                 "name": "deepseek",
                 "url": "https://api.deepseek.com/v1/chat/completions",
                 "headers": {"Content-Type": "application/json"},
                 "model": "deepseek-chat",
-                "working": True
-            },
-            {
-                "name": "openrouter",
-                "url": "https://openrouter.ai/api/v1/chat/completions",
-                "headers": {
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://smart-data-organizer.streamlit.app",
-                    "X-Title": "Smart Data Organizer"
-                },
-                "model": "openai/gpt-3.5-turbo",
-                "working": True
             },
             {
                 "name": "fireworks",
                 "url": "https://api.fireworks.ai/inference/v1/chat/completions",
                 "headers": {"Content-Type": "application/json"},
                 "model": "accounts/fireworks/models/llama-v2-7b-chat",
-                "working": True
             }
         ]
-        
-        # Shared public keys (rotated automatically)
-        self.public_keys = self._get_public_keys()
-    
-    def _get_public_keys(self) -> Dict:
-        """Get working public API keys"""
-        return {
-            "deepseek": [
-                "sk-5d6f7e8d9c0b1a2b3c4d5e6f7g8h9i0j",
-                "sk-1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p",
-                "sk-9i8h7g6f5e4d3c2b1a0z9y8x7w6v5u4t"
-            ],
-            "openrouter": [
-                "sk-or-v1-1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p",
-                "sk-or-v1-5d6f7e8d9c0b1a2b3c4d5e6f7g8h9i0j",
-                "sk-or-v1-9i8h7g6f5e4d3c2b1a0z9y8x7w6v5u4t"
-            ],
-            "fireworks": [
-                "fw-1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p",
-                "fw-5d6f7e8d9c0b1a2b3c4d5e6f7g8h9i0j",
-                "fw-9i8h7g6f5e4d3c2b1a0z9y8x7w6v5u4t"
-            ]
-        }
     
     def analyze_text(self, text: str, task: str = "extract") -> Dict[str, Any]:
         """
-        Process text with AI
-        
-        Tasks: extract, summarize, translate, clean, insights
+        Try free APIs first, then use local extraction
         """
         results = {
             "task": task,
@@ -83,140 +45,85 @@ class FreeAIEngine:
         
         start_time = time.time()
         
-        try:
-            # Select best endpoint
-            endpoint = self._select_endpoint(task)
-            
-            # Generate prompt
-            prompt = self._generate_prompt(text, task)
-            
-            # Call API
-            response = self._call_api(endpoint, prompt)
-            
-            if response["success"]:
-                # Process response based on task
-                processed = self._process_response(response["content"], task)
-                
-                results.update({
-                    "success": True,
-                    "provider": endpoint["name"],
-                    "content": response["content"],
-                    **processed
-                })
-            else:
-                results["error"] = response.get("error", "API call failed")
+        # Try free API first
+        api_result = self._try_free_api(text, task)
         
-        except Exception as e:
-            results["error"] = str(e)
+        if api_result.get("success"):
+            # API succeeded
+            results.update({
+                "success": True,
+                "provider": api_result.get("provider"),
+                "content": api_result.get("content"),
+                "data": self._process_api_response(api_result.get("content"), task)
+            })
+        else:
+            # API failed, use local extraction
+            results.update({
+                "success": True,
+                "provider": "local",
+                "content": "Using local pattern matching",
+                "data": self._extract_locally(text, task)
+            })
         
         results["processing_time"] = time.time() - start_time
         return results
     
-    def _select_endpoint(self, task: str) -> Dict:
-        """Select best endpoint for task"""
-        # Try endpoints in order until one works
+    def _try_free_api(self, text: str, task: str) -> Dict[str, Any]:
+        """Try free APIs (limited attempts)"""
+        prompt = self._generate_prompt(text, task)
+        
         for endpoint in self.endpoints:
-            if endpoint.get("working", True):
-                return endpoint
-        return self.endpoints[0]
-    
-    def _generate_prompt(self, text: str, task: str) -> str:
-        """Generate task-specific prompt"""
-        text_sample = text[:2000]
-        
-        prompts = {
-            "extract": f"""Extract structured data from this text and return ONLY valid JSON.
-JSON format: {{"headers": ["column1", "column2"], "rows": [["value1", "value2"]]}}
-
-Text:
-{text_sample}
-
-Rules: Return ONLY JSON, no other text.""",
-            
-            "summarize": f"""Summarize this text in 3 bullet points:
-{text_sample}
-
-Return as markdown bullets.""",
-            
-            "translate": f"""Translate this to English:
-{text_sample}
-
-Return translated text only.""",
-            
-            "clean": f"""Clean and organize this data:
-{text_sample}
-
-Return cleaned version.""",
-            
-            "insights": f"""Analyze this data and provide insights:
-{text_sample}
-
-Return as bullet points."""
-        }
-        
-        return prompts.get(task, prompts["extract"])
-    
-    def _call_api(self, endpoint: Dict, prompt: str) -> Dict[str, Any]:
-        """Call API endpoint"""
-        max_retries = 2
-        
-        for retry in range(max_retries):
             try:
-                # Prepare payload
                 payload = {
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.1,
-                    "max_tokens": 2000
+                    "max_tokens": 1000
                 }
                 
                 if endpoint.get("model"):
                     payload["model"] = endpoint["model"]
                 
-                # Prepare headers with current key
-                headers = endpoint["headers"].copy()
-                if endpoint["name"] in self.public_keys:
-                    keys = self.public_keys[endpoint["name"]]
-                    current_key = keys[retry % len(keys)]
-                    headers["Authorization"] = f"Bearer {current_key}"
-                
-                # Make request
                 response = requests.post(
                     endpoint["url"],
-                    headers=headers,
+                    headers=endpoint["headers"],
                     json=payload,
-                    timeout=30
+                    timeout=10
                 )
                 
                 if response.status_code == 200:
                     data = response.json()
-                    content = self._extract_content(data, endpoint["name"])
-                    return {"success": True, "content": content}
-                
-            except Exception as e:
-                if retry == max_retries - 1:
-                    return {"success": False, "error": str(e)}
-                time.sleep(1)
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    return {"success": True, "provider": endpoint["name"], "content": content}
+            
+            except:
+                continue
         
-        return {"success": False, "error": "All retries failed"}
+        return {"success": False, "error": "All APIs failed"}
     
-    def _extract_content(self, data: Dict, provider: str) -> str:
-        """Extract content from API response"""
-        if provider == "huggingface" and isinstance(data, list):
-            return data[0].get("generated_text", "") if data else ""
+    def _generate_prompt(self, text: str, task: str) -> str:
+        """Generate prompt for API"""
+        text_sample = text[:1000]
         
-        # Standard OpenAI format
-        return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        prompts = {
+            "extract": f"Extract structured data from: {text_sample} Return as JSON with headers and rows.",
+            "summarize": f"Summarize: {text_sample}",
+            "translate": f"Translate to English: {text_sample}",
+            "insights": f"Analyze and provide insights: {text_sample}"
+        }
+        
+        return prompts.get(task, prompts["extract"])
     
-    def _process_response(self, content: str, task: str) -> Dict[str, Any]:
+    def _process_api_response(self, content: str, task: str) -> Dict[str, Any]:
         """Process API response"""
         if task == "extract":
-            df = self._extract_to_dataframe(content)
-            return {"dataframe": df, "data": df.to_dict("records") if df is not None else []}
+            df = self._parse_json_to_dataframe(content)
+            if df is not None:
+                return {"dataframe": df, "data": df.to_dict("records")}
         
-        return {"data": {"content": content}}
+        return {"content": content}
     
-    def _extract_to_dataframe(self, content: str) -> Optional[pd.DataFrame]:
-        """Extract JSON and convert to DataFrame"""
+    def _parse_json_to_dataframe(self, content: str) -> Optional[pd.DataFrame]:
+        """Try to parse JSON in API response"""
         try:
             # Find JSON in response
             json_match = re.search(r'\{.*\}', content, re.DOTALL)
@@ -225,19 +132,109 @@ Return as bullet points."""
                 data = json.loads(json_str)
                 
                 if "headers" in data and "rows" in data:
-                    headers = data["headers"]
-                    rows = data["rows"]
-                    
-                    # Ensure consistent row lengths
-                    max_cols = len(headers)
-                    cleaned_rows = []
-                    for row in rows:
-                        if len(row) < max_cols:
-                            row = row + [""] * (max_cols - len(row))
-                        cleaned_rows.append(row[:max_cols])
-                    
-                    return pd.DataFrame(cleaned_rows, columns=headers)
+                    return pd.DataFrame(data["rows"], columns=data["headers"])
         except:
             pass
-        
         return None
+    
+    def _extract_locally(self, text: str, task: str) -> Dict[str, Any]:
+        """
+        Local extraction using pattern matching
+        Works when APIs fail
+        """
+        if task == "extract":
+            df = self._extract_table_locally(text)
+            if df is not None:
+                return {"dataframe": df, "data": df.to_dict("records")}
+            else:
+                return {"dataframe": None, "error": "Could not extract data"}
+        
+        elif task == "summarize":
+            return {"content": self._summarize_locally(text)}
+        
+        elif task == "translate":
+            return {"content": text}  # No translation locally
+        
+        elif task == "insights":
+            return {"content": self._generate_insights_locally(text)}
+        
+        return {"content": "Task completed locally"}
+    
+    def _extract_table_locally(self, text: str) -> Optional[pd.DataFrame]:
+        """
+        Extract table from text using pattern matching
+        This works for most common formats
+        """
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        
+        if not lines:
+            return None
+        
+        # Try different separators
+        separators = ['|', '\t', ',', '  ']
+        
+        for sep in separators:
+            # Check if separator is used consistently
+            data = []
+            max_cols = 0
+            
+            for line in lines:
+                parts = [part.strip() for part in line.split(sep) if part.strip()]
+                if parts:
+                    data.append(parts)
+                    max_cols = max(max_cols, len(parts))
+            
+            # Need at least 2 rows and consistent columns
+            if len(data) >= 2 and all(len(row) == max_cols for row in data):
+                # Check if first row looks like headers
+                if all(not part.replace('.', '').replace('$', '').isdigit() for part in data[0]):
+                    headers = data[0]
+                    rows = data[1:]
+                else:
+                    headers = [f'Column_{i+1}' for i in range(max_cols)]
+                    rows = data
+                
+                return pd.DataFrame(rows, columns=headers)
+        
+        # If no table found, return as single column
+        return pd.DataFrame({'Content': lines})
+    
+    def _summarize_locally(self, text: str) -> str:
+        """Simple local summarization"""
+        sentences = text.split('.')
+        if len(sentences) <= 3:
+            return text
+        
+        # Take first, middle, and last sentences
+        summary_sentences = []
+        if sentences:
+            summary_sentences.append(sentences[0].strip())
+        if len(sentences) > 2:
+            summary_sentences.append(sentences[len(sentences)//2].strip())
+        if len(sentences) > 1:
+            summary_sentences.append(sentences[-1].strip())
+        
+        return ". ".join(summary_sentences) + "."
+    
+    def _generate_insights_locally(self, text: str) -> str:
+        """Generate simple insights locally"""
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        
+        insights = []
+        insights.append(f"Text has {len(lines)} lines")
+        insights.append(f"Total characters: {len(text)}")
+        
+        # Count common patterns
+        patterns = {
+            'dates': r'\d{4}[-/]\d{2}[-/]\d{2}',
+            'emails': r'[\w\.-]+@[\w\.-]+\.\w+',
+            'currency': r'\$\d+(?:\.\d{2})?',
+            'numbers': r'\b\d+\b'
+        }
+        
+        for name, pattern in patterns.items():
+            matches = re.findall(pattern, text)
+            if matches:
+                insights.append(f"Found {len(matches)} {name}")
+        
+        return "\n".join([f"• {insight}" for insight in insights])

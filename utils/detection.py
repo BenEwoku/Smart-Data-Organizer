@@ -365,9 +365,7 @@ def detect_email_threads(df):
         
     except:
         return {"has_threads": False, "thread_count": 0}
-
-
-# Add to utils/detection.py
+        
 
 def detect_spam_emails(df, spam_threshold=70):
     """

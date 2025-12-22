@@ -7,6 +7,7 @@ import streamlit as st
 from utils.scraping import scrape_url
 from utils.parser import parse_text_to_dataframe
 from utils.detection import detect_data_structure
+from utils.detection import detect_spam_emails
 from utils.cleaning import clean_dataframe
 from utils.organization import organize_time_series, organize_panel_data, organize_cross_sectional
 from utils.export import export_to_csv, export_to_excel
@@ -25,6 +26,7 @@ from email.header import decode_header
 import re
 from datetime import datetime
 from io import BytesIO  # <-- ADD THIS LINE
+
 
 
 def parse_mbox_file(mbox_file):

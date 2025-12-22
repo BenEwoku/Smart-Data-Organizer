@@ -1,4 +1,3 @@
-
 """
 AI Organizer Tab - Complete Tab 6 Implementation
 """
@@ -106,6 +105,7 @@ def show_ai_organizer_tab():
     
     # ==================== INITIALIZE AI ====================
     if 'ai_orchestrator' not in st.session_state:
+        from .ai_orchestrator import AIOrchestrator
         st.session_state.ai_orchestrator = AIOrchestrator()
     
     # ==================== INPUT SECTION ====================

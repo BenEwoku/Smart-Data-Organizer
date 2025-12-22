@@ -1,7 +1,6 @@
 """
 100% Free AI Engine using Hugging Face Inference API (with Local Fallback)
 """
-import streamlit as st
 import requests
 import json
 import re
@@ -14,7 +13,11 @@ class FreeAIEngine:
     
     def __init__(self):
         # Try to get token from secrets
-        self.hf_token = st.secrets.get("HF_TOKEN", None)
+        try:
+            import streamlit as st
+            self.hf_token = st.secrets.get("HF_TOKEN", None)
+        except:
+            self.hf_token = None
         
         # Fallback models (free tier - prioritize smaller models)
         self.models = [

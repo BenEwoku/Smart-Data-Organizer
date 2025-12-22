@@ -4,6 +4,16 @@ Entry Point: streamlit run app.py
 """
 
 import streamlit as st
+import pandas as pd
+import mailbox
+import email
+from email.header import decode_header
+import re
+from datetime import datetime
+from io import BytesIO  # <-- ADD THIS LINE
+import requests
+from requests.exceptions import Timeout, ConnectionError, SSLError
+import time
 from utils.scraping import scrape_url
 from utils.parser import parse_text_to_dataframe
 from utils.detection import detect_data_structure
@@ -18,16 +28,7 @@ from utils.auth import (
 from utils.payment import show_pricing_page, show_billing_portal
 from admin_panel import show_admin_panel
 from utils.validation import validate_data_input, validate_dataframe, get_data_quality_score
-import pandas as pd
 
-import mailbox
-import email
-from email.header import decode_header
-import re
-from datetime import datetime
-from io import BytesIO  # <-- ADD THIS LINE
-import requests
-from requests.exceptions import Timeout, ConnectionError, SSLError
 #from ai_organizer import show_ai_organizer_tab #for tab6
 
 

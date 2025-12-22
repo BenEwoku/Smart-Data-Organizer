@@ -25,8 +25,6 @@ from utils.auth import (
     show_login_page, is_logged_in, get_current_user, 
     show_user_sidebar, can_convert, increment_conversion_count, is_admin
 )
-from utils.payment import show_pricing_page, show_billing_portal
-from admin_panel import show_admin_panel
 from utils.validation import validate_data_input, validate_dataframe, get_data_quality_score
 
 #from ai_organizer import show_ai_organizer_tab #for tab6
@@ -769,7 +767,7 @@ with st.sidebar.expander("Tier Status", expanded=False):
     else:
         st.warning(f"Current tier: {user['tier']}")
 
-# Navigation with admin protection
+## Navigation with admin protection
 st.sidebar.markdown("---")
 st.sidebar.header("Navigation")
 
@@ -778,13 +776,14 @@ if is_admin(st.session_state.user_email):
     page_options = ["Home", "Admin Panel", "Pricing"]
     st.sidebar.markdown('<div style="background-color: #ff4b4b; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; display: inline-block; margin-bottom: 10px;">ADMIN</div>', unsafe_allow_html=True)
 else:
-    page_options = ["Home", "Pricing"]  # REMOVED "Billing" - now part of Pricing
+    page_options = ["Home", "Pricing"]
 
 page = st.sidebar.radio("Go to:", page_options, label_visibility="collapsed")
 
 # Handle pages
 if page == "Home":
     # Your existing home page code continues here
+    # Don't change anything in your Home tab
     pass
 
 elif page == "Admin Panel":
@@ -793,19 +792,40 @@ elif page == "Admin Panel":
         st.error("Access Denied: Admin privileges required")
         st.stop()
     
-    # Use SIMPLE admin panel
+    # Import admin panel HERE (not at top)
     try:
         from admin_panel import show_admin_panel
         show_admin_panel()
     except Exception as e:
-        # Fallback to ultra-simple
         st.markdown("# Admin Panel")
         st.error(f"Error: {type(e).__name__}")
         
         if st.button("Clear Cache & Retry"):
-            import streamlit as st
             st.cache_data.clear()
             st.rerun()
+    
+    st.stop()
+
+elif page == "Pricing":
+    # Import pricing page HERE (not at top)
+    try:
+        # Try PayPal first
+        from utils.paypal_integration import show_paypal_pricing_page
+        show_paypal_pricing_page()
+    except ImportError:
+        # Fallback to simple system
+        try:
+            from utils.payment import show_simple_pricing_page
+            show_simple_pricing_page()
+        except ImportError:
+            # Ultimate fallback
+            st.markdown("# Pricing")
+            st.markdown("## Free Tier: 50 conversions/month")
+            st.markdown("## Pro Tier: $5.00/month")
+            if st.button("Upgrade to Pro"):
+                st.info("Email support@smartdata.com to upgrade")
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
     
     st.stop()
 

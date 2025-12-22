@@ -24,6 +24,7 @@ import email
 from email.header import decode_header
 import re
 from datetime import datetime
+from io import BytesIO  # <-- ADD THIS LINE
 
 
 def parse_mbox_file(mbox_file):

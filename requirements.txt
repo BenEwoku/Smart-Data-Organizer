@@ -14,6 +14,7 @@ lxml>=4.9.0
 # ADD THESE for enhanced scraping:
 # HTML5 parser for better compatibility
 html5lib>=1.1
+uuid>=1.30
 
 # Selenium for JavaScript-heavy sites (CRITICAL ADDITION)
 selenium>=4.15.0
@@ -153,6 +154,10 @@ safety>=2.3.5
 
 # Environment variables
 python-dotenv>=1.0.0
+
+#pay pal
+paypalrestsdk>=1.13.3
+paypal-checkout-serversdk>=1.0.1
 
 # ============= NOTES =============
 # For Selenium to work, you also need:

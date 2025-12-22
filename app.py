@@ -775,17 +775,19 @@ st.sidebar.header("Navigation")
 
 # Show admin option ONLY if user is admin
 if is_admin(st.session_state.user_email):
-    page_options = ["Home", "Admin Panel", "Pricing", "Billing"]
+    page_options = ["Home", "Admin Panel", "Pricing"]
     st.sidebar.markdown('<div style="background-color: #ff4b4b; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; display: inline-block; margin-bottom: 10px;">ADMIN</div>', unsafe_allow_html=True)
 else:
-    page_options = ["Home", "Pricing", "Billing"]
+    page_options = ["Home", "Pricing"]  # REMOVED "Billing" - now part of Pricing
 
 page = st.sidebar.radio("Go to:", page_options, label_visibility="collapsed")
 
-# Handle pages with security check
-# In app.py, replace the Admin Panel section with:
+# Handle pages
+if page == "Home":
+    # Your existing home page code continues here
+    pass
 
-if page == "Admin Panel":
+elif page == "Admin Panel":
     # SECURITY CHECK
     if not is_admin(st.session_state.user_email):
         st.error("Access Denied: Admin privileges required")
@@ -804,6 +806,24 @@ if page == "Admin Panel":
             import streamlit as st
             st.cache_data.clear()
             st.rerun()
+    
+    st.stop()
+
+elif page == "Pricing":
+    # PayPal automatic payment system
+    try:
+        from utils.paypal_integration import show_paypal_pricing_page
+        show_paypal_pricing_page()
+    except Exception as e:
+        st.error(f"PayPal system error: {str(e)}")
+        # Fallback to simple system
+        try:
+            from utils.payment import show_simple_auto_pricing
+            show_simple_auto_pricing()
+        except:
+            st.markdown("# Pricing")
+            st.markdown("Pro Tier: $5.00/month")
+            st.button("Upgrade to Pro")
     
     st.stop()
 

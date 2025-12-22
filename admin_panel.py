@@ -548,6 +548,53 @@ def show_quick_actions():
         
         if st.button("Reset Admin Password", use_container_width=True):
             st.info("Admin password reset (development only)")
+    
+    # ============ ADD THIS NEW SECTION HERE ============
+    st.markdown("---")
+    st.markdown("### Upgrade Code Management")
+    
+    try:
+        from utils.payment import show_code_management
+        show_code_management()
+    except Exception as e:
+        st.error(f"Upgrade code system not available: {str(e)}")
+        st.info("Make sure utils/payment.py exists")
+
+    st.markdown("---")
+    st.markdown("### PayPal Management")
+
+    try:
+        from utils.paypal_integration import show_paypal_admin_panel
+        show_paypal_admin_panel()
+    except Exception as e:
+        st.error(f"PayPal admin not available: {str(e)}")
+    
+    # Add manual code generation
+    st.markdown("#### Generate Manual Code")
+    
+    col_gen1, col_gen2 = st.columns([2, 1])
+    
+    with col_gen1:
+        # Get all users for selection
+        from utils.auth import get_all_users
+        users = get_all_users()
+        
+        if users:
+            user_options = [f"{u['email']} ({u.get('name', 'No name')})" for u in users]
+            selected_user = st.selectbox("Select user for code:", user_options)
+            
+            if selected_user:
+                user_email = selected_user.split(" (")[0]
+                
+                with col_gen2:
+                    if st.button("Generate Code", use_container_width=True, type="primary"):
+                        from utils.payment_simple import generate_upgrade_code
+                        code = generate_upgrade_code(user_email)
+                        st.success(f"Generated code: **{code}**")
+                        st.info(f"For user: {user_email}")
+                        st.caption("This code expires in 24 hours")
+        else:
+            st.info("No users found")
 
 def show_system_settings():
     """System configuration"""

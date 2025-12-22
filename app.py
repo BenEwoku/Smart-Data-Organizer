@@ -26,8 +26,8 @@ from email.header import decode_header
 import re
 from datetime import datetime
 from io import BytesIO  # <-- ADD THIS LINE
-# In your imports section (near top of app.py)
-from ai_organizer import show_ai_organizer_tab  # Add this line
+#from ai_organizer import show_ai_organizer_tab #for tab6
+
 
 
 
@@ -880,8 +880,8 @@ def get_method_description(method):
 
 # Main content area
 # Update your tabs to include AI tab
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
-    ["Input", "Detect", "Organize", "Export", "Impute", "AI Assist"]  # New AI Assist tab
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["Input", "Detect", "Organize", "Export", "Impute"]  # New AI Assist tab
 )
 
 # TAB 1: INPUT
@@ -2911,8 +2911,8 @@ with tab5:
 
 # TAB 6: AI ORGANIZER
 # In the AI Organizer tab section
-with tab6:
-    show_ai_organizer_tab()
+#with tab6:
+    #show_ai_organizer_tab()
 
 # Footer
 st.markdown("---")

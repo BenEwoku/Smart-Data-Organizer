@@ -719,7 +719,7 @@ def show_system_settings():
                 "Monthly price ($):",
                 min_value=0.0,
                 max_value=100.0,
-                value=5.00,  # Your $5 price
+                value=5.00,
                 step=0.01,
                 help="Monthly subscription price for Pro tier"
             )
@@ -729,6 +729,9 @@ def show_system_settings():
                 ["Unlimited", "Custom"],
                 help="Pro tier conversions"
             )
+            
+            # FIX: Initialize custom_limit before using it
+            custom_limit = 1000  # Default value
             
             if pro_conversions == "Custom":
                 custom_limit = st.number_input(
@@ -774,6 +777,7 @@ def show_system_settings():
                 },
                 'pro': {
                     'price': pro_price,
+                    # FIX: Now custom_limit is always defined
                     'conversions': 'unlimited' if pro_conversions == "Unlimited" else custom_limit,
                     'features': pro_features,
                     'billing_cycle': billing_cycle,
@@ -781,18 +785,19 @@ def show_system_settings():
                     'trial_days': trial_days if enable_trial else 0
                 }
             }
-
-            # Save tier configuration to session state
+            
+            # Save to session state
             import streamlit as st
             st.session_state.tier_configuration = tier_config
-
-            # Also update system settings if free tier limits changed
+            
+            # Update free tier limits in system settings
             if 'free' in tier_config:
                 if 'system_settings' not in st.session_state:
                     st.session_state.system_settings = {}
+                
                 st.session_state.system_settings['free_conversions'] = tier_config['free'].get('conversions_limit', 50)
                 st.session_state.system_settings['free_scrapes'] = tier_config['free'].get('scrapes_limit', 3)
-
+            
             st.success("Tier configuration saved!")
             
             # Show summary
@@ -814,48 +819,6 @@ def show_system_settings():
                     st.write(f"• Billing: {billing_cycle}")
                     if enable_trial:
                         st.write(f"• {trial_days}-day free trial")
-    
-    # System actions
-    st.markdown("---")
-    st.markdown("### System Actions")
-    
-    col_act1, col_act2, col_act3 = st.columns(3)
-    
-    with col_act1:
-        if st.button("Reset All Limits", use_container_width=True):
-            # Reset all user conversions
-            from utils.auth import get_all_users, update_user
-            users = get_all_users()
-            
-            for user in users:
-                if user['tier'] == 'free':
-                    update_user(user['email'], {'conversions_used': 0})
-            
-            st.success("Reset all free user limits!")
-    
-    with col_act2:
-        if st.button("Apply to All Users", use_container_width=True):
-            # Apply new limits to existing users
-            st.info("This will update all existing users with new limits")
-            if st.checkbox("Confirm apply to all users"):
-                st.success("Applied new tier configuration!")
-    
-    with col_act3:
-        if st.button("Export Configuration", use_container_width=True):
-            # Export settings to JSON
-            import json
-            config_data = {
-                'system_settings': st.session_state.get('system_settings', {}),
-                'tier_configuration': st.session_state.get('tier_configuration', {})
-            }
-            
-            json_str = json.dumps(config_data, indent=2)
-            st.download_button(
-                label="Download JSON",
-                data=json_str,
-                file_name="smartdata_config.json",
-                mime="application/json"
-            )
 
 def show_development_tools():
     """Development and testing tools - SINGLE CORRECT VERSION"""

@@ -565,15 +565,33 @@ def show_quick_actions():
         if st.button("Reset Admin Password", use_container_width=True):
             st.info("Admin password reset (development only)")
     
+    # ============ FIXED: Initialize before using ============
     st.markdown("---")
     st.markdown("### Upgrade Code Management")
     
     try:
+        # CRITICAL: Initialize upgrade codes FIRST
+        if 'upgrade_codes' not in st.session_state:
+            st.session_state.upgrade_codes = {}
+        
+        # Now it's safe to import and use
         from utils.payment import show_code_management
         show_code_management()
+        
     except Exception as e:
-        st.error(f"Upgrade code system not available: {str(e)}")
-        st.info("Make sure utils/payment.py exists")
+        st.error(f"Upgrade code system error: {str(e)}")
+        
+        # Show what the error is
+        import traceback
+        with st.expander("Error Details"):
+            st.code(traceback.format_exc())
+        
+        st.info("Initializing upgrade codes system...")
+        
+        # Try to initialize manually
+        if 'upgrade_codes' not in st.session_state:
+            st.session_state.upgrade_codes = {}
+            st.success("Upgrade codes initialized. Please try again.")
 
     st.markdown("---")
     st.markdown("### PayPal Management")
@@ -582,7 +600,7 @@ def show_quick_actions():
         from utils.paypal_integration import show_paypal_admin_panel
         show_paypal_admin_panel()
     except Exception as e:
-        st.error(f"PayPal admin not available: {str(e)}")
+        st.warning(f"PayPal admin not available: {str(e)}")
     
     # Add manual code generation
     st.markdown("#### Generate Manual Code")
@@ -603,11 +621,18 @@ def show_quick_actions():
                 
                 with col_gen2:
                     if st.button("Generate Code", use_container_width=True, type="primary"):
-                        from utils.payment import generate_upgrade_code
-                        code = generate_upgrade_code(user_email)
-                        st.success(f"Generated code: **{code}**")
-                        st.info(f"For user: {user_email}")
-                        st.caption("This code expires in 24 hours")
+                        try:
+                            # Initialize if needed
+                            if 'upgrade_codes' not in st.session_state:
+                                st.session_state.upgrade_codes = {}
+                            
+                            from utils.payment import generate_upgrade_code
+                            code = generate_upgrade_code(user_email)
+                            st.success(f"Generated code: **{code}**")
+                            st.info(f"For user: {user_email}")
+                            st.caption("This code expires in 24 hours")
+                        except Exception as gen_error:
+                            st.error(f"Error generating code: {str(gen_error)}")
         else:
             st.info("No users found")
 

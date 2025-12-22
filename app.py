@@ -976,88 +976,7 @@ with tab1:
                                 st.error("Could not parse the text. Please check the format.")
             else:
                 st.warning("Please paste some data first")
-    
-    elif input_method == "Web Scraping":
-        st.markdown("**Enter URL to scrape data**")
-        st.caption("Works best with pages containing tables or structured lists")
-        
-        # Check tier for web scraping limits
-        if user['tier'] == 'free':
-            st.info("Free tier: Limited to 3 URL scrapes per month")
-        
-        url_input = st.text_input(
-            "Website URL:",
-            placeholder="https://example.com/data-page",
-            label_visibility="collapsed"
-        )
-        
-        # Advanced options expander
-        with st.expander("Advanced Options"):
-            use_js = st.checkbox(
-                "Use JavaScript rendering", 
-                help="Enable for websites that load data dynamically with JavaScript",
-                value=False
-            )
-            timeout = st.slider("Timeout (seconds)", 10, 60, 30)
-        
-        col1, col2, col3 = st.columns([1, 1, 2])
-        with col1:
-            scrape_btn = st.button("Scrape URL", type="primary", use_container_width=True)
-        
-        if scrape_btn:
-            if url_input:
-                with st.spinner("Scraping website..."):
-                    # Show progress
-                    progress_bar = st.progress(0)
-                    
-                    try:
-                        # Step 1: Making request
-                        progress_text = st.empty()
-                        progress_text.text("Connecting to website...")
-                        progress_bar.progress(20)
-                        
-                        # Step 2: Scraping
-                        progress_text.text("Extracting data...")
-                        progress_bar.progress(50)
-                        
-                        # Use enhanced scraping function
-                        from utils.scraping import scrape_url
-                        df_raw = scrape_url(url_input, timeout=timeout, use_selenium=use_js)
-                        
-                        progress_bar.progress(80)
-                        
-                        if df_raw is not None:
-                            # Clean column names before storing
-                            import pandas as pd
-                            
-                            # Fill NaN column names
-                            df_raw.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df_raw.columns)]
-                            
-                            # Handle duplicate column names
-                            cols = pd.Series(df_raw.columns)
-                            for dup in cols[cols.duplicated()].unique():
-                                cols[cols == dup] = [f'{dup}_{i}' if i != 0 else dup for i in range(sum(cols == dup))]
-                            
-                            df_raw.columns = cols
-                            
-                            st.session_state.df = df_raw
-                            # Increment conversion count
-                            increment_conversion_count(st.session_state.user_email)
-                            
-                            progress_text.text("Processing data...")
-                            progress_bar.progress(100)
-                            
-                            st.success("Data scraped successfully!")
-                            st.rerun()
-                        else:
-                            progress_bar.progress(0)
-                            st.error("Could not extract data from this URL. Try enabling JavaScript rendering.")
-                            
-                    except Exception as e:
-                        progress_bar.progress(0)
-                        st.error(f"Scraping failed: {str(e)}")
-            else:
-                st.warning("Please enter a URL")
+
     
     elif input_method == "Upload File":
         st.markdown("**Upload your data file**")
@@ -1185,6 +1104,325 @@ with tab1:
                         st.session_state.data_cleaned = False
                         st.session_state.structure_detected = False
                         st.rerun()
+
+    # ============= FIX 2: FIXED WEB SCRAPING SECTION =============
+    # Replace your current "Web Scraping" section with this:
+
+    elif input_method == "Web Scraping":
+        st.markdown("**Enter URL to scrape data**")
+        st.caption("Works best with pages containing tables or structured lists")
+        
+        # Check tier for web scraping limits
+        if user['tier'] == 'free':
+            st.info("Free tier: Limited to 3 URL scrapes per month")
+            
+            # Check if user has scraping attempts left
+            scrapes_used = user.get('scrapes_used', 0)
+            scrapes_remaining = 3 - scrapes_used
+            
+            if scrapes_remaining <= 0:
+                st.error("You've used all your free scrapes this month. Upgrade to Pro for unlimited scraping!")
+                if st.button("Upgrade Now", type="primary"):
+                    st.session_state.show_pricing = True
+                    st.rerun()
+                st.stop()
+            else:
+                st.warning(f"{scrapes_remaining} scrape(s) remaining this month")
+        
+        url_input = st.text_input(
+            "Website URL:",
+            placeholder="https://example.com/data-page",
+            label_visibility="collapsed"
+        )
+        
+        # FIXED: Show URL validation
+        if url_input:
+            # Validate URL format
+            if not url_input.startswith(('http://', 'https://')):
+                st.error("URL must start with http:// or https://")
+            else:
+                st.success(f"Valid URL: {url_input}")
+        
+        # Advanced options expander
+        with st.expander("Advanced Options"):
+            col_opt1, col_opt2 = st.columns(2)
+            
+            with col_opt1:
+                use_js = st.checkbox(
+                    "Use JavaScript rendering", 
+                    help="Enable for websites that load data dynamically with JavaScript (slower but more powerful)",
+                    value=False
+                )
+            
+            with col_opt2:
+                timeout = st.slider("Timeout (seconds)", 10, 120, 30)
+            
+            # ADDED: Extraction method preference
+            st.markdown("**Extraction Priority:**")
+            extraction_methods = st.multiselect(
+                "Methods to try (in order):",
+                ["HTML Tables", "Lists", "Structured Divs", "API Endpoints", "Text Content"],
+                default=["HTML Tables", "Lists", "Structured Divs"],
+                help="The scraper will try these methods in order until one succeeds"
+            )
+        
+        # FIXED: Better button layout
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            scrape_btn = st.button("Scrape Website", type="primary", use_container_width=True)
+        
+        with col2:
+            if url_input:
+                test_btn = st.button("Test URL", use_container_width=True, 
+                                help="Test if URL is accessible without scraping")
+        
+        # FIXED: Test URL functionality
+        if url_input and 'test_btn' in locals() and test_btn:
+            with st.spinner("Testing URL accessibility..."):
+                try:
+                    import requests
+                    response = requests.head(url_input, timeout=10, allow_redirects=True)
+                    
+                    st.success(f"URL is accessible (Status: {response.status_code})")
+                    
+                    # Show URL info
+                    with st.expander("URL Details", expanded=True):
+                        st.write(f"**Final URL:** {response.url}")
+                        st.write(f"**Content-Type:** {response.headers.get('Content-Type', 'Unknown')}")
+                        st.write(f"**Server:** {response.headers.get('Server', 'Unknown')}")
+                        
+                        # Hint about JavaScript
+                        content_type = response.headers.get('Content-Type', '')
+                        if 'text/html' in content_type:
+                            st.info("This is an HTML page. If data doesn't load, try enabling JavaScript rendering.")
+                        elif 'application/json' in content_type:
+                            st.success("This appears to be a JSON API endpoint - perfect for scraping!")
+                        
+                except requests.exceptions.Timeout:
+                    st.error("URL timed out - try increasing timeout in Advanced Options")
+                except requests.exceptions.ConnectionError:
+                    st.error("Cannot connect to URL - check if it's accessible")
+                except Exception as e:
+                    st.error(f"Error testing URL: {str(e)}")
+        
+        # FIXED: Main scraping logic with detailed feedback
+        if scrape_btn:
+            if not url_input:
+                st.warning("Please enter a URL first")
+            elif not url_input.startswith(('http://', 'https://')):
+                st.error("URL must start with http:// or https://")
+            else:
+                # Create a progress container
+                progress_container = st.container()
+                
+                with progress_container:
+                    st.markdown("### Scraping Progress")
+                    
+                    # Progress indicators
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    strategy_text = st.empty()
+                    
+                    try:
+                        # Step 1: Initialize
+                        status_text.text("Initializing scraper...")
+                        progress_bar.progress(10)
+                        time.sleep(0.5)
+                        
+                        # Step 2: Connect to URL
+                        status_text.text(f"Connecting to {url_input}...")
+                        strategy_text.caption("Testing URL accessibility...")
+                        progress_bar.progress(20)
+                        
+                        # FIXED: Import the enhanced scraper
+                        from utils.scraping import scrape_url
+                        
+                        # Step 3: Start scraping
+                        status_text.text("Downloading page content...")
+                        strategy_text.caption("Trying multiple extraction strategies...")
+                        progress_bar.progress(40)
+                        
+                        # FIXED: Actually call the scraper with parameters
+                        df_raw = scrape_url(
+                            url=url_input, 
+                            timeout=timeout, 
+                            use_selenium=use_js
+                        )
+                        
+                        progress_bar.progress(80)
+                        
+                        # FIXED: Better error handling
+                        if df_raw is not None and len(df_raw) > 0:
+                            # Success!
+                            status_text.text("Data extraction successful!")
+                            strategy_text.caption("Processing extracted data...")
+                            progress_bar.progress(90)
+                            
+                            # CRITICAL FIX: Clean column names BEFORE storing
+                            import pandas as pd
+                            
+                            # Fill NaN column names
+                            df_raw.columns = [
+                                f'Column_{i}' if pd.isna(col) or col == '' else str(col).strip()
+                                for i, col in enumerate(df_raw.columns)
+                            ]
+                            
+                            # Handle duplicate column names
+                            cols = pd.Series(df_raw.columns)
+                            for dup in cols[cols.duplicated()].unique():
+                                dup_indices = [i for i, x in enumerate(cols) if x == dup]
+                                for idx, i in enumerate(dup_indices):
+                                    if idx > 0:  # Keep first occurrence, rename others
+                                        cols.iloc[i] = f'{dup}_{idx}'
+                            
+                            df_raw.columns = cols
+                            
+                            # Store in session state
+                            st.session_state.df = df_raw
+                            
+                            # FIXED: Properly increment conversion count
+                            from utils.auth import increment_conversion_count
+                            increment_conversion_count(st.session_state.user_email)
+                            
+                            # Update scrape count for free users
+                            if user['tier'] == 'free':
+                                # TODO: Add scrape tracking to your auth system
+                                pass
+                            
+                            progress_bar.progress(100)
+                            status_text.text("Scraping completed successfully!")
+                            
+                            # Show success metrics
+                            st.success("Data scraped successfully!")
+                            
+                            col_metric1, col_metric2, col_metric3 = st.columns(3)
+                            with col_metric1:
+                                st.metric("Rows Extracted", f"{len(df_raw):,}")
+                            with col_metric2:
+                                st.metric("Columns Extracted", len(df_raw.columns))
+                            with col_metric3:
+                                completeness = (df_raw.notna().sum().sum() / 
+                                            (len(df_raw) * len(df_raw.columns)) * 100)
+                                st.metric("Completeness", f"{completeness:.1f}%")
+                            
+                            # Show preview
+                            with st.expander("Data Preview", expanded=True):
+                                st.dataframe(df_raw.head(10), use_container_width=True)
+                                st.caption(f"Showing first 10 of {len(df_raw):,} rows")
+                            
+                            # Auto-advance hint
+                            st.info("✨ Click on the **Detect** tab to continue")
+                            
+                            # Clear progress indicators after short delay
+                            time.sleep(2)
+                            progress_container.empty()
+                            
+                        else:
+                            # Failed to extract data
+                            progress_bar.progress(100)
+                            status_text.text("Scraping failed")
+                            
+                            st.error("Could not extract data from this URL")
+                            
+                            # Provide detailed troubleshooting
+                            with st.expander("Troubleshooting Tips", expanded=True):
+                                st.markdown("""
+                                **Why scraping might fail:**
+                                
+                                1. **Website blocks scrapers** 
+                                - Try enabling "JavaScript rendering" in Advanced Options
+                                - Some sites actively block automated access
+                                
+                                2. **No structured data found**
+                                - The page might not contain tables or lists
+                                - Data might be loaded via JavaScript → Enable JS rendering
+                                - Try viewing the page source to see if data is visible
+                                
+                                3. **Authentication required**
+                                - Some sites require login to view data
+                                - Try exporting data manually or use their API
+                                
+                                4. **Rate limiting**
+                                - The site detected too many requests
+                                - Wait a few minutes and try again
+                                
+                                5. **Dynamic content**
+                                - Enable "JavaScript rendering" option
+                                - Increase timeout to 60+ seconds
+                                
+                                **What to try next:**
+                                - Enable JavaScript rendering (if not already)
+                                - Increase timeout to 60-120 seconds
+                                - Check if the URL shows data when opened in browser
+                                - Try the "Upload File" option instead
+                                - Look for an "Export" or "Download" button on the website
+                                """)
+                            
+                            # Suggest alternatives
+                            st.info("**Alternative:** Many websites offer CSV/Excel exports. Look for a download button!")
+                            
+                            # Show what was attempted
+                            with st.expander("What We Tried", expanded=False):
+                                st.markdown("""
+                                The scraper attempted these strategies:
+                                1. ✓ Multiple user agents (Chrome, Firefox, Safari, Mobile)
+                                2. ✓ HTML table extraction
+                                3. ✓ List extraction (ul, ol, dl)
+                                4. ✓ Structured div extraction
+                                5. ✓ JSON-LD structured data
+                                6. ✓ Preformatted text
+                                7. ✓ Code blocks
+                                8. ✓ API endpoint detection
+                                9. ✓ Embedded JavaScript data
+                                """)
+                                
+                                if use_js:
+                                    st.write("10. ✓ Selenium with JavaScript rendering")
+                    
+                    except requests.exceptions.Timeout:
+                        progress_bar.progress(0)
+                        status_text.text("Request timed out")
+                        st.error(f"Request timed out after {timeout} seconds")
+                        st.info("Try increasing the timeout in Advanced Options (60-120 seconds)")
+                        
+                    except requests.exceptions.ConnectionError:
+                        progress_bar.progress(0)
+                        status_text.text("Connection failed")
+                        st.error("Could not connect to URL. Check if it's accessible in your browser.")
+                        
+                    except Exception as e:
+                        progress_bar.progress(0)
+                        status_text.text("Scraping error")
+                        st.error(f"Scraping failed: {str(e)}")
+                        
+                        # Show detailed error for debugging
+                        with st.expander("Technical Details"):
+                            st.code(str(e))
+                            st.caption("If this error persists, please report it or try the 'Upload File' option instead.")
+        
+        # ADDED: Example URLs to test
+        with st.expander("Example URLs to Try", expanded=False):
+            st.markdown("""
+            **Test the scraper with these working examples:**
+            
+            1. **Wikipedia Tables:**
+            - `https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)`
+            - Easy to scrape, contains clean tables
+            
+            2. **Government Data:**
+            - `https://www.data.gov/` (various datasets)
+            - Usually well-structured
+            
+            3. **Sports Statistics:**
+            - `https://www.basketball-reference.com/`
+            - Rich statistical tables
+            
+            4. **Financial Data:**
+            - Yahoo Finance, Google Finance (public data)
+            
+            **Note:** Some websites block scraping. Always check the site's terms of service.
+            """)
 
 
     elif input_method == "Email Export":

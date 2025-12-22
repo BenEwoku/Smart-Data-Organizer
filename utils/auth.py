@@ -474,6 +474,18 @@ def increment_conversion_count(email):
     
     return False
 
+def increment_scrape_count(email):
+    """Track scraping attempts for free users"""
+    if not st.session_state.get('users_df'):
+        load_users()
+    
+    users_df = st.session_state.users_df
+    user_idx = users_df[users_df['email'] == email].index
+    
+    if len(user_idx) > 0:
+        users_df.loc[user_idx, 'scrapes_used'] = users_df.loc[user_idx, 'scrapes_used'].fillna(0) + 1
+        save_users(users_df)
+
 def get_conversion_limit(tier):
     """Get conversion limit based on tier"""
     limits = {

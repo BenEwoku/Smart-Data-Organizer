@@ -637,11 +637,25 @@ def show_quick_actions():
             st.info("No users found")
 
 def show_system_settings():
-    """System configuration - FIXED VERSION"""
+    """System configuration - COMPLETELY FIXED"""
     
     st.subheader("System Settings")
     
-    # App configuration
+    # Initialize session state for form values
+    if 'settings_form_data' not in st.session_state:
+        st.session_state.settings_form_data = {
+            'free_conversions': 50,
+            'free_scrapes': 3,
+            'session_timeout': 120,
+            'enable_web_scraping': True,
+            'enable_file_upload': True,
+            'enable_excel_export': False,
+            'enable_registration': True,
+            'enable_demo_mode': True,
+            'enable_admin_panel': True
+        }
+    
+    # App configuration form
     with st.form("system_settings"):
         st.markdown("### Application Settings")
         
@@ -650,7 +664,7 @@ def show_system_settings():
             "Free tier conversions limit:",
             min_value=1,
             max_value=1000,
-            value=50,
+            value=st.session_state.settings_form_data['free_conversions'],
             help="Number of conversions allowed for free tier"
         )
         
@@ -659,7 +673,7 @@ def show_system_settings():
             "Free tier web scrapes limit:",
             min_value=1,
             max_value=100,
-            value=3,
+            value=st.session_state.settings_form_data['free_scrapes'],
             help="Number of URL scrapes allowed for free tier"
         )
         
@@ -668,7 +682,7 @@ def show_system_settings():
             "Session timeout (minutes):",
             min_value=5,
             max_value=1440,
-            value=120,
+            value=st.session_state.settings_form_data['session_timeout'],
             help="User session timeout in minutes"
         )
         
@@ -677,46 +691,80 @@ def show_system_settings():
         col1, col2 = st.columns(2)
         
         with col1:
-            enable_web_scraping = st.toggle("Enable web scraping", value=True)
-            enable_file_upload = st.toggle("Enable file upload", value=True)
-            enable_excel_export = st.toggle("Enable Excel export for free tier", value=False)
+            enable_web_scraping = st.toggle("Enable web scraping", 
+                                           value=st.session_state.settings_form_data['enable_web_scraping'])
+            enable_file_upload = st.toggle("Enable file upload", 
+                                          value=st.session_state.settings_form_data['enable_file_upload'])
+            enable_excel_export = st.toggle("Enable Excel export for free tier", 
+                                           value=st.session_state.settings_form_data['enable_excel_export'])
         
         with col2:
-            enable_registration = st.toggle("Enable new registrations", value=True)
-            enable_demo_mode = st.toggle("Enable demo mode", value=True)
-            enable_admin_panel = st.toggle("Enable admin panel", value=True)
+            enable_registration = st.toggle("Enable new registrations", 
+                                           value=st.session_state.settings_form_data['enable_registration'])
+            enable_demo_mode = st.toggle("Enable demo mode", 
+                                        value=st.session_state.settings_form_data['enable_demo_mode'])
+            enable_admin_panel = st.toggle("Enable admin panel", 
+                                          value=st.session_state.settings_form_data['enable_admin_panel'])
         
-        # Save settings
+        # Save settings button
         submitted_settings = st.form_submit_button("Save Settings", type="primary")
-    
-    # Handle form submission OUTSIDE the form
-    if submitted_settings:
-        # In production, save to database or config file
-        settings = {
-            'free_conversions': free_conversions,
-            'free_scrapes': free_scrapes,
-            'session_timeout': session_timeout,
-            'features': {
-                'web_scraping': enable_web_scraping,
-                'file_upload': enable_file_upload,
-                'excel_export_free': enable_excel_export,
-                'registration': enable_registration,
-                'demo_mode': enable_demo_mode,
-                'admin_panel': enable_admin_panel
-            }
-        }
         
-        # Save to session state
-        st.session_state.system_settings = settings
-        st.success("Settings saved! (Note: Changes are session-only)")
+        # Handle submission INSIDE form
+        if submitted_settings:
+            # Store values in session state
+            st.session_state.settings_form_data = {
+                'free_conversions': free_conversions,
+                'free_scrapes': free_scrapes,
+                'session_timeout': session_timeout,
+                'enable_web_scraping': enable_web_scraping,
+                'enable_file_upload': enable_file_upload,
+                'enable_excel_export': enable_excel_export,
+                'enable_registration': enable_registration,
+                'enable_demo_mode': enable_demo_mode,
+                'enable_admin_panel': enable_admin_panel
+            }
+            
+            settings = {
+                'free_conversions': free_conversions,
+                'free_scrapes': free_scrapes,
+                'session_timeout': session_timeout,
+                'features': {
+                    'web_scraping': enable_web_scraping,
+                    'file_upload': enable_file_upload,
+                    'excel_export_free': enable_excel_export,
+                    'registration': enable_registration,
+                    'demo_mode': enable_demo_mode,
+                    'admin_panel': enable_admin_panel
+                }
+            }
+            
+            st.session_state.system_settings = settings
+            st.session_state.settings_saved = True
+    
+    # Show success message OUTSIDE form
+    if st.session_state.get('settings_saved', False):
+        st.success("Settings saved successfully! (Session-only)")
+        st.session_state.settings_saved = False  # Reset flag
     
     # Pricing configuration - SEPARATE FORM
     st.markdown("---")
     st.markdown("### Tier Configuration")
     
-    # Initialize default values
-    if 'tier_config_submitted' not in st.session_state:
-        st.session_state.tier_config_submitted = False
+    # Initialize pricing form data
+    if 'pricing_form_data' not in st.session_state:
+        st.session_state.pricing_form_data = {
+            'free_conversions_limit': 50,
+            'free_scrapes_limit': 3,
+            'free_features': ["CSV Export", "Basic Cleaning", "Data Detection", "Missing Value Imputation"],
+            'pro_price': 5.00,
+            'pro_conversions': "Unlimited",
+            'custom_limit': 1000,
+            'pro_features': ["Unlimited Conversions", "Excel Export", "Priority Support", 
+                           "Advanced Organization", "Web Scraping", "Email Analysis", "All Future Features"],
+            'billing_cycle': "Monthly",
+            'enable_trial': True,
+            'trial_days': 7
+        }
     
     with st.form("pricing_settings"):
         col1, col2 = st.columns(2)
@@ -727,7 +775,7 @@ def show_system_settings():
                 "Conversions limit:",
                 min_value=1,
                 max_value=1000,
-                value=50,
+                value=st.session_state.pricing_form_data['free_conversions_limit'],
                 help="Max conversions for free users"
             )
             
@@ -735,14 +783,14 @@ def show_system_settings():
                 "Web scrapes limit:",
                 min_value=0,
                 max_value=50,
-                value=3,
+                value=st.session_state.pricing_form_data['free_scrapes_limit'],
                 help="Max URL scrapes for free users"
             )
             
             free_features = st.multiselect(
                 "Free tier features:",
                 ["CSV Export", "Basic Cleaning", "Email Support", "Data Detection", "Missing Value Imputation"],
-                default=["CSV Export", "Basic Cleaning", "Data Detection", "Missing Value Imputation"]
+                default=st.session_state.pricing_form_data['free_features']
             )
         
         with col2:
@@ -751,7 +799,7 @@ def show_system_settings():
                 "Monthly price ($):",
                 min_value=0.0,
                 max_value=100.0,
-                value=5.00,
+                value=st.session_state.pricing_form_data['pro_price'],
                 step=0.01,
                 help="Monthly subscription price for Pro tier"
             )
@@ -759,25 +807,25 @@ def show_system_settings():
             pro_conversions = st.selectbox(
                 "Conversions limit:",
                 ["Unlimited", "Custom"],
+                index=0 if st.session_state.pricing_form_data['pro_conversions'] == "Unlimited" else 1,
                 help="Pro tier conversions"
             )
             
-            custom_limit = 1000
+            custom_limit = st.session_state.pricing_form_data['custom_limit']
             
             if pro_conversions == "Custom":
                 custom_limit = st.number_input(
                     "Custom limit:",
                     min_value=100,
                     max_value=10000,
-                    value=1000
+                    value=st.session_state.pricing_form_data['custom_limit']
                 )
             
             pro_features = st.multiselect(
                 "Pro tier features:",
                 ["Unlimited Conversions", "Excel Export", "Priority Support", "Advanced Organization", 
                  "Web Scraping", "Email Analysis", "AI Assistance", "All Future Features"],
-                default=["Unlimited Conversions", "Excel Export", "Priority Support", 
-                         "Advanced Organization", "Web Scraping", "Email Analysis", "All Future Features"]
+                default=st.session_state.pricing_form_data['pro_features']
             )
         
         # Billing options
@@ -789,55 +837,71 @@ def show_system_settings():
         with col_b1:
             billing_cycle = st.selectbox(
                 "Default billing cycle:",
-                ["Monthly", "Annual (Save 20%)"]
+                ["Monthly", "Annual (Save 20%)"],
+                index=0 if st.session_state.pricing_form_data['billing_cycle'] == "Monthly" else 1
             )
         
         with col_b2:
-            enable_trial = st.toggle("Enable free trial", value=True)
-            trial_days = 7
+            enable_trial = st.toggle("Enable free trial", 
+                                    value=st.session_state.pricing_form_data['enable_trial'])
+            trial_days = st.session_state.pricing_form_data['trial_days']
             if enable_trial:
-                trial_days = st.number_input("Trial days:", min_value=1, max_value=30, value=7)
+                trial_days = st.number_input("Trial days:", 
+                                             min_value=1, 
+                                             max_value=30, 
+                                             value=st.session_state.pricing_form_data['trial_days'])
         
         submitted_pricing = st.form_submit_button("Update Tier Configuration", type="primary")
-    
-    # Handle pricing form submission OUTSIDE the form
-    if submitted_pricing:
-        # Save tier configuration
-        tier_config = {
-            'free': {
-                'conversions_limit': free_conversions_limit,
-                'scrapes_limit': free_scrapes_limit,
-                'features': free_features,
-                'price': 0.00
-            },
-            'pro': {
-                'price': pro_price,
-                'conversions': 'unlimited' if pro_conversions == "Unlimited" else custom_limit,
-                'features': pro_features,
+        
+        # Handle submission INSIDE form
+        if submitted_pricing:
+            # Store in session state
+            st.session_state.pricing_form_data = {
+                'free_conversions_limit': free_conversions_limit,
+                'free_scrapes_limit': free_scrapes_limit,
+                'free_features': free_features,
+                'pro_price': pro_price,
+                'pro_conversions': pro_conversions,
+                'custom_limit': custom_limit,
+                'pro_features': pro_features,
                 'billing_cycle': billing_cycle,
-                'trial_enabled': enable_trial,
-                'trial_days': trial_days if enable_trial else 0
+                'enable_trial': enable_trial,
+                'trial_days': trial_days
             }
-        }
-        
-        # Save to session state
-        st.session_state.tier_configuration = tier_config
-        
-        # Update free tier limits in system settings
-        if 'free' in tier_config:
+            
+            # Save tier configuration
+            tier_config = {
+                'free': {
+                    'conversions_limit': free_conversions_limit,
+                    'scrapes_limit': free_scrapes_limit,
+                    'features': free_features,
+                    'price': 0.00
+                },
+                'pro': {
+                    'price': pro_price,
+                    'conversions': 'unlimited' if pro_conversions == "Unlimited" else custom_limit,
+                    'features': pro_features,
+                    'billing_cycle': billing_cycle,
+                    'trial_enabled': enable_trial,
+                    'trial_days': trial_days if enable_trial else 0
+                }
+            }
+            
+            st.session_state.tier_configuration = tier_config
+            
+            # Update system settings
             if 'system_settings' not in st.session_state:
                 st.session_state.system_settings = {}
             
-            st.session_state.system_settings['free_conversions'] = tier_config['free'].get('conversions_limit', 50)
-            st.session_state.system_settings['free_scrapes'] = tier_config['free'].get('scrapes_limit', 3)
-        
+            st.session_state.system_settings['free_conversions'] = free_conversions_limit
+            st.session_state.system_settings['free_scrapes'] = free_scrapes_limit
+            
+            st.session_state.pricing_saved = True
+    
+    # Show success and summary OUTSIDE form
+    if st.session_state.get('pricing_saved', False):
         st.success("Tier configuration saved successfully!")
         
-        # Store flag to show summary
-        st.session_state.tier_config_submitted = True
-    
-    # Show configuration summary OUTSIDE form if recently submitted
-    if st.session_state.get('tier_config_submitted', False):
         st.markdown("---")
         st.markdown("### Current Configuration")
         
@@ -866,13 +930,11 @@ def show_system_settings():
                     st.write(f"• Billing: {config['pro'].get('billing_cycle', 'Monthly')}")
                     if config['pro'].get('trial_enabled', False):
                         st.write(f"• {config['pro'].get('trial_days', 7)}-day free trial")
-            
-            # Button to dismiss summary
-            if st.button("Dismiss Summary", type="secondary"):
-                st.session_state.tier_config_submitted = False
-                st.rerun()
-        else:
-            st.info("No configuration saved yet")
+        
+        # Reset flag after showing
+        if st.button("Dismiss Summary"):
+            st.session_state.pricing_saved = False
+            st.rerun()
 
 def show_development_tools():
     """Development and testing tools - COMPLETELY FIXED VERSION"""

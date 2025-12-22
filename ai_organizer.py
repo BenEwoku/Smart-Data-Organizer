@@ -1,10 +1,10 @@
+
 """
 AI Organizer Tab - Complete Tab 6 Implementation
 """
 import streamlit as st
 import pandas as pd
 from typing import Dict, List, Any
-from utils.ai_orchestrator import AIOrchestrator
 from io import BytesIO
 
 def show_ai_organizer_tab():

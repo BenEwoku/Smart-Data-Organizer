@@ -16,15 +16,21 @@ class FreeAIEngine:
         try:
             import streamlit as st
             self.hf_token = st.secrets.get("HF_TOKEN", None)
-        except:
+            # DEBUG: Show if token is loaded
+            if self.hf_token:
+                st.sidebar.info("HF Token loaded successfully")
+            else:
+                st.sidebar.warning("No HF Token found — using local fallback only")
+        except Exception as e:
+            st.sidebar.error(f"Error loading HF Token: {str(e)}")
             self.hf_token = None
         
         # Fallback models (free tier - prioritize smaller models)
         self.models = [
-            "facebook/mbart-large-50-many-to-many-mmt",  # Best for translation (Chinese→English)
-            "google/flan-t5-small",                      # Good for extraction/summarization
-            "t5-small",                                  # Lightweight
-            "sshleifer/distilbart-cnn-12-6"              # Summarization
+            "Helsinki-NLP/opus-mt-zh-en",  # Free, no token needed, Chinese → English
+            "google/flan-t5-small",       # Good for extraction/summarization
+            "t5-small",                   # Very lightweight alternative
+            "sshleifer/distilbart-cnn-12-6"  # Fast summarization
         ]
         
         self.current_model = 0
@@ -134,7 +140,7 @@ JSON:""",
 
 Summary:""",
             
-            "translate": f"""Translate this text to English. If the text is already in English, return it as is.
+            "translate": f"""Translate this Chinese text to English. Do not add any extra text or explanations.
 
 Text:
 {text}
@@ -211,7 +217,6 @@ Insights:"""
         
         elif task == "translate":
             # Return original text as translation (no actual translation)
-            # You can add a placeholder or use langdetect here
             return {
                 "success": True,
                 "provider": "local_fallback",

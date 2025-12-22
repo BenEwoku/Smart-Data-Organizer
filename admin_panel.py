@@ -7,6 +7,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import json
+import traceback
 
 def show_admin_management():
     """Manage admin users"""
@@ -359,7 +360,7 @@ def show_user_management(df_users):
         st.info("No users available for actions")
 
 def show_analytics_dashboard(users):
-    """Analytics and reporting - UPDATED FOR 2 TIERS"""
+    """Analytics and reporting"""
     
     st.subheader("Analytics Dashboard")
     
@@ -369,7 +370,7 @@ def show_analytics_dashboard(users):
     # Filter to only free/pro tiers (in case old data exists)
     df['tier'] = df['tier'].apply(lambda x: 'free' if str(x).lower() not in ['free', 'pro'] else str(x).lower())
     
-    # Tier distribution - UPDATED
+    # Tier distribution
     col1, col2 = st.columns(2)
     
     with col1:
@@ -564,7 +565,6 @@ def show_quick_actions():
         if st.button("Reset Admin Password", use_container_width=True):
             st.info("Admin password reset (development only)")
     
-    # ============ ADD THIS NEW SECTION HERE ============
     st.markdown("---")
     st.markdown("### Upgrade Code Management")
     
@@ -612,7 +612,7 @@ def show_quick_actions():
             st.info("No users found")
 
 def show_system_settings():
-    """System configuration - Updated for Free & Pro only"""
+    """System configuration"""
     
     st.subheader("System Settings")
     
@@ -682,7 +682,7 @@ def show_system_settings():
             st.session_state.system_settings = settings
             st.success("Settings saved! (Note: Changes are session-only)")
     
-    # Pricing configuration - UPDATED FOR 2 TIERS ONLY
+    # Pricing configuration
     st.markdown("---")
     st.markdown("### Tier Configuration")
     
@@ -730,8 +730,7 @@ def show_system_settings():
                 help="Pro tier conversions"
             )
             
-            # FIX: Initialize custom_limit before using it
-            custom_limit = 1000  # Default value
+            custom_limit = 1000
             
             if pro_conversions == "Custom":
                 custom_limit = st.number_input(
@@ -763,6 +762,7 @@ def show_system_settings():
         
         with col_b2:
             enable_trial = st.toggle("Enable free trial", value=True)
+            trial_days = 7
             if enable_trial:
                 trial_days = st.number_input("Trial days:", min_value=1, max_value=30, value=7)
         
@@ -777,7 +777,6 @@ def show_system_settings():
                 },
                 'pro': {
                     'price': pro_price,
-                    # FIX: Now custom_limit is always defined
                     'conversions': 'unlimited' if pro_conversions == "Unlimited" else custom_limit,
                     'features': pro_features,
                     'billing_cycle': billing_cycle,
@@ -787,7 +786,6 @@ def show_system_settings():
             }
             
             # Save to session state
-            import streamlit as st
             st.session_state.tier_configuration = tier_config
             
             # Update free tier limits in system settings
@@ -821,156 +819,194 @@ def show_system_settings():
                         st.write(f"• {trial_days}-day free trial")
 
 def show_development_tools():
-    """Development and testing tools - FIXED VERSION"""
+    """Development and testing tools - COMPLETELY FIXED VERSION"""
     
     st.subheader("Development Tools")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### Testing Tools")
+    # Wrap everything in try-except for debugging
+    try:
+        col1, col2 = st.columns(2)
         
-        # Test data generation
-        if st.button("Generate Test Dataset", use_container_width=True):
+        with col1:
+            st.markdown("### Testing Tools")
+            
+            # Test data generation
+            if st.button("Generate Test Dataset", use_container_width=True):
+                try:
+                    import pandas as pd
+                    import numpy as np
+                    
+                    # Create sample time series data
+                    dates = pd.date_range(start='2024-01-01', periods=100, freq='D')
+                    data = {
+                        'Date': dates,
+                        'Sales': np.random.randint(1000, 5000, 100),
+                        'Revenue': np.random.randint(50000, 200000, 100),
+                        'Region': np.random.choice(['North', 'South', 'East', 'West'], 100)
+                    }
+                    
+                    df = pd.DataFrame(data)
+                    st.session_state.df = df
+                    st.success("Test dataset generated! Switch to Home tab to see it.")
+                except Exception as e:
+                    st.error(f"Error generating test data: {str(e)}")
+                    st.code(traceback.format_exc())
+            
+            # Clear all data
+            if st.button("Clear All App Data", use_container_width=True, type="secondary"):
+                try:
+                    st.session_state.df = None
+                    st.session_state.data_structure = None
+                    st.session_state.df_organized = None
+                    st.success("All app data cleared!")
+                except Exception as e:
+                    st.error(f"Error clearing data: {str(e)}")
+        
+        with col2:
+            st.markdown("### Debug Tools")
+            
+            # View session state
+            if st.button("View Session State", use_container_width=True):
+                try:
+                    st.write("### Current Session State")
+                    for key in st.session_state.keys():
+                        if key not in ['users_db', 'password']:  # Skip sensitive data
+                            st.write(f"**{key}:**", st.session_state[key])
+                except Exception as e:
+                    st.error(f"Error viewing session: {str(e)}")
+            
+            # Reset app state
+            if st.button("Reset App State", use_container_width=True):
+                try:
+                    # Keep only essential state
+                    keep_keys = ['users_db', 'logged_in', 'user_email', 'user_data', 'is_admin']
+                    for key in list(st.session_state.keys()):
+                        if key not in keep_keys:
+                            del st.session_state[key]
+                    
+                    st.success("App state reset!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error resetting state: {str(e)}")
+                    st.code(traceback.format_exc())
+        
+        # Cache Management - COMPLETELY REWRITTEN
+        st.markdown("---")
+        st.markdown("### Cache Management")
+        
+        cache_col1, cache_col2 = st.columns(2)
+        
+        with cache_col1:
+            if st.button("Clear ALL Caches", use_container_width=True, type="primary"):
+                try:
+                    st.cache_data.clear()
+                    st.cache_resource.clear()
+                    if 'user_cache' in st.session_state:
+                        st.session_state.user_cache = {}
+                    st.success("All caches cleared!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error clearing caches: {str(e)}")
+                    st.code(traceback.format_exc())
+        
+        with cache_col2:
+            # User-specific cache clearing - FIXED with proper error handling
             try:
-                import pandas as pd
-                import numpy as np
+                from utils.auth import get_all_users, clear_user_cache
                 
-                # Create sample time series data
-                dates = pd.date_range(start='2024-01-01', periods=100, freq='D')
-                data = {
-                    'Date': dates,
-                    'Sales': np.random.randint(1000, 5000, 100),
-                    'Revenue': np.random.randint(50000, 200000, 100),
-                    'Region': np.random.choice(['North', 'South', 'East', 'West'], 100)
-                }
+                users = get_all_users()
                 
-                df = pd.DataFrame(data)
-                st.session_state.df = df
-                st.success("Test dataset generated! Switch to Home tab to see it.")
+                if users and len(users) > 0:
+                    user_emails = [u['email'] for u in users]
+                    
+                    selected_email = st.selectbox(
+                        "Clear cache for user:",
+                        user_emails,
+                        key="cache_user_select"
+                    )
+                    
+                    if st.button("Clear User Cache", use_container_width=True):
+                        try:
+                            success = clear_user_cache(selected_email)
+                            if success:
+                                st.success(f"Cache cleared for {selected_email}")
+                                st.rerun()
+                            else:
+                                st.error("Failed to clear cache")
+                        except Exception as clear_error:
+                            st.error(f"Error clearing user cache: {str(clear_error)}")
+                            st.code(traceback.format_exc())
+                else:
+                    st.info("No users found")
+                    
             except Exception as e:
-                st.error(f"Error generating test data: {str(e)}")
+                st.error(f"Cache management error: {str(e)}")
+                st.code(traceback.format_exc())
+                st.caption("Try clearing all caches instead")
         
-        # Clear all data
-        if st.button("Clear All App Data", use_container_width=True, type="secondary"):
-            st.session_state.df = None
-            st.session_state.data_structure = None
-            st.session_state.df_organized = None
-            st.success("All app data cleared!")
-    
-    with col2:
-        st.markdown("### Debug Tools")
+        # Database operations
+        st.markdown("---")
+        st.markdown("### Database Operations")
         
-        # View session state
-        if st.button("View Session State", use_container_width=True):
-            st.write("### Current Session State")
-            for key in st.session_state.keys():
-                if key not in ['users_db', 'password']:  # Skip sensitive data
-                    st.write(f"**{key}:**", st.session_state[key])
+        col1, col2 = st.columns(2)
         
-        # Reset app state
-        if st.button("Reset App State", use_container_width=True):
-            # Keep only essential state
-            keep_keys = ['users_db', 'logged_in', 'user_email', 'user_data', 'is_admin']
-            for key in list(st.session_state.keys()):
-                if key not in keep_keys:
-                    del st.session_state[key]
-            
-            st.success("App state reset!")
-            st.rerun()
-    
-    # Cache Management (FIXED VERSION)
-    st.markdown("---")
-    st.markdown("### Cache Management")
-    
-    cache_col1, cache_col2 = st.columns(2)
-    
-    with cache_col1:
-        if st.button("Clear ALL Caches", use_container_width=True, type="primary"):
-            import streamlit as st
-            st.cache_data.clear()
-            st.cache_resource.clear()
-            if 'user_cache' in st.session_state:
-                st.session_state.user_cache = {}
-            st.success("All caches cleared!")
-            st.rerun()
-    
-    with cache_col2:
-        # User-specific cache clearing - FIXED
-        from utils.auth import get_all_users
+        with col1:
+            if st.button("Export Database", use_container_width=True):
+                try:
+                    from utils.auth import load_users
+                    
+                    users = load_users()
+                    # Remove passwords for security
+                    for email_key in users:
+                        if 'password' in users[email_key]:
+                            users[email_key]['password'] = '***HIDDEN***'
+                    
+                    db_json = json.dumps(users, indent=2, default=str)
+                    st.download_button(
+                        label="Download Database JSON",
+                        data=db_json,
+                        file_name="users_database.json",
+                        mime="application/json"
+                    )
+                except Exception as e:
+                    st.error(f"Error exporting database: {str(e)}")
+                    st.code(traceback.format_exc())
         
-        try:
-            users = get_all_users()
-            if users and len(users) > 0:
-                user_emails = [u['email'] for u in users]
-                selected_email = st.selectbox(
-                    "Clear cache for user:",
-                    user_emails,
-                    key="cache_user_select"
-                )
-                
-                if st.button("Clear User Cache", use_container_width=True):
-                    from utils.auth import clear_user_cache
-                    success = clear_user_cache(selected_email)
-                    if success:
-                        st.success(f"Cache cleared for {selected_email}")
-                        st.rerun()
-                    else:
-                        st.error("Failed to clear cache")
-            else:
-                st.info("No users found")
-        except Exception as e:
-            st.error(f"Cache management error: {str(e)}")
-            st.caption("Try clearing all caches instead")
-    
-    # Database operations
-    st.markdown("---")
-    st.markdown("### Database Operations")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("Export Database", use_container_width=True):
+        with col2:
+            if st.button("Import Database", use_container_width=True):
+                st.warning("Database import feature coming soon!")
+        
+        # System info
+        st.markdown("---")
+        with st.expander("System Information"):
             try:
-                from utils.auth import load_users
-                import json
+                import sys
+                import platform
                 
-                users = load_users()
-                # Remove passwords for security
-                for email in users:
-                    if 'password' in users[email]:
-                        users[email]['password'] = '***HIDDEN***'
+                st.write("**Python Version:**", sys.version.split()[0])
+                st.write("**Platform:**", platform.platform())
+                st.write("**Streamlit Version:**", st.__version__)
                 
-                db_json = json.dumps(users, indent=2, default=str)
-                st.download_button(
-                    label="Download Database JSON",
-                    data=db_json,
-                    file_name="users_database.json",
-                    mime="application/json"
-                )
+                try:
+                    import pandas as pd
+                    st.write("**Pandas Version:**", pd.__version__)
+                except:
+                    st.write("**Pandas:** Not available")
+                    
             except Exception as e:
-                st.error(f"Error exporting database: {str(e)}")
+                st.error(f"Error getting system info: {str(e)}")
+                st.code(traceback.format_exc())
     
-    with col2:
-        if st.button("Import Database", use_container_width=True):
-            st.warning("Database import feature coming soon!")
-    
-    # System info
-    st.markdown("---")
-    with st.expander("System Information"):
-        try:
-            import sys
-            import platform
-            
-            st.write("Python Version:", sys.version.split()[0])
-            st.write("Platform:", platform.platform())
-            st.write("Streamlit Version:", st.__version__)
-            
-            try:
-                import pandas as pd
-                st.write("Pandas Version:", pd.__version__)
-            except:
-                st.write("Pandas: Not available")
-                
-        except Exception as e:
-            st.error(f"Error getting system info: {str(e)}")
+    except Exception as main_error:
+        st.error(f"CRITICAL ERROR in Development Tools: {str(main_error)}")
+        st.code(traceback.format_exc())
+        st.warning("Please report this error to the administrator")
+        
+        # Show which line caused the error
+        import sys
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        if exc_traceback:
+            st.write("**Error Location:**")
+            import traceback as tb
+            for line in tb.format_tb(exc_traceback):
+                st.code(line)

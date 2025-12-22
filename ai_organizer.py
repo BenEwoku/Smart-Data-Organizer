@@ -1,162 +1,441 @@
 """
-AI Organizer Tab
+AI Organizer Tab - Complete Tab 6 Implementation
 """
 import streamlit as st
 import pandas as pd
 from typing import Dict, List, Any
 from utils.ai_orchestrator import AIOrchestrator
+from io import BytesIO
 
 def show_ai_organizer_tab():
     """Main AI Organizer Tab"""
     
-    st.markdown('<h2 class="subheader">AI Data Organizer</h2>', unsafe_allow_html=True)
-    
+    # ==================== HEADER ====================
     st.markdown("""
-    **Transform text into organized data using AI**
+    <div style="
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2.5rem;
+        border-radius: 15px;
+        margin-bottom: 2rem;
+        color: white;
+        text-align: center;
+    ">
+        <h1 style="color: white; margin: 0; font-size: 2.8rem;">AI Data Organizer</h1>
+        <p style="color: rgba(255, 255, 255, 0.95); font-size: 1.2rem; margin: 0.8rem 0 0 0;">
+        Transform ANY text into organized data • 100% Free • No API Keys Required
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    This tool uses AI to extract structured data from any text, 
-    whether it's invoices, contact lists, tables, or unstructured content.
-    """)
+    # Feature Cards
+    st.markdown("### AI Features")
     
-    # Initialize AI
+    feature_cols = st.columns(4)
+    
+    with feature_cols[0]:
+        st.markdown("""
+        <div style="
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+            border-top: 4px solid #667eea;
+        ">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+            <h4 style="margin: 0;">Data Extraction</h4>
+            <p style="color: #666; font-size: 0.9rem; margin: 0.5rem 0 0 0;">
+            Extract tables from any text
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with feature_cols[1]:
+        st.markdown("""
+        <div style="
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+            border-top: 4px solid #764ba2;
+        ">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div>
+            <h4 style="margin: 0;">Summarization</h4>
+            <p style="color: #666; font-size: 0.9rem; margin: 0.5rem 0 0 0;">
+            Generate concise summaries
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with feature_cols[2]:
+        st.markdown("""
+        <div style="
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+            border-top: 4px solid #4CAF50;
+        ">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌍</div>
+            <h4 style="margin: 0;">Translation</h4>
+            <p style="color: #666; font-size: 0.9rem; margin: 0.5rem 0 0 0;">
+            Translate text to English
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with feature_cols[3]:
+        st.markdown("""
+        <div style="
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+            border-top: 4px solid #FF9800;
+        ">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>
+            <h4 style="margin: 0;">Insights</h4>
+            <p style="color: #666; font-size: 0.9rem; margin: 0.5rem 0 0 0;">
+            Generate data insights
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # ==================== INITIALIZE AI ====================
     if 'ai_orchestrator' not in st.session_state:
         st.session_state.ai_orchestrator = AIOrchestrator()
     
-    # Input Section
-    st.markdown("### Input Data")
+    # ==================== INPUT SECTION ====================
+    st.markdown("### Input Your Data")
     
-    raw_text = st.text_area(
-        "Paste your text here:",
-        height=200,
-        placeholder="""Paste any text with data to organize. Examples:
+    input_method = st.radio(
+        "Choose input method:",
+        ["Paste Text", "Upload File", "Web URL"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    
+    raw_text = ""
+    
+    if input_method == "Paste Text":
+        # Load example if available
+        if 'ai_example_text' in st.session_state:
+            raw_text = st.session_state.ai_example_text
+        
+        raw_text = st.text_area(
+            "Paste your text here:",
+            value=raw_text,
+            height=250,
+            placeholder="""Examples of what you can paste:
 
-Product ID | Product Name | Price | Stock
-PROD-001 | Laptop Pro | $1,299.00 | 45
-PROD-002 | Wireless Mouse | $49.99 | 120
+INVOICE #1001
+Date: 2024-01-15
+Customer: Acme Corp
+Total: $125.00
 
 OR
 
 Name, Email, Phone
 John, john@email.com, 555-1234
-Sarah, sarah@email.com, 555-5678""",
-        label_visibility="collapsed"
-    )
+Sarah, sarah@email.com, 555-5678
+
+OR any unstructured text from PDFs, emails, documents...""",
+            label_visibility="collapsed"
+        )
     
-    # Feature Selection
-    st.markdown("### Select Features")
+    elif input_method == "Upload File":
+        uploaded_file = st.file_uploader(
+            "Upload a file:",
+            type=['txt', 'pdf', 'doc', 'docx', 'csv'],
+            help="Text will be extracted automatically"
+        )
+        
+        if uploaded_file:
+            with st.spinner("Extracting text..."):
+                raw_text = extract_text_from_file(uploaded_file)
+                st.success(f"Extracted {len(raw_text)} characters")
     
-    col1, col2, col3 = st.columns(3)
+    elif input_method == "Web URL":
+        url = st.text_input("Enter URL:")
+        if url:
+            with st.spinner("Fetching content..."):
+                try:
+                    import requests
+                    from bs4 import BeautifulSoup
+                    response = requests.get(url, timeout=10)
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    raw_text = soup.get_text()
+                    st.success(f"Fetched {len(raw_text)} characters")
+                except:
+                    st.error("Could not fetch URL")
     
-    with col1:
-        extract_data = st.checkbox("Extract Data", value=True)
+    # ==================== AI FEATURES SELECTION ====================
+    st.markdown("### Select AI Features")
     
-    with col2:
-        summarize = st.checkbox("Summarize")
-    
-    with col3:
-        insights = st.checkbox("Insights")
+    feature_options = {
+        "Extract Data": "extract",
+        "Summarize": "summarize", 
+        "Translate": "translate",
+        "Clean Data": "clean",
+        "Generate Insights": "insights"
+    }
     
     selected_features = []
-    if extract_data:
-        selected_features.append("extract")
-    if summarize:
-        selected_features.append("summarize")
-    if insights:
-        selected_features.append("insights")
+    cols = st.columns(5)
     
-    # Process Button
+    for idx, (display_name, feature_key) in enumerate(feature_options.items()):
+        with cols[idx % 5]:
+            if st.checkbox(display_name, value=(feature_key in ["extract", "summarize"])):
+                selected_features.append(feature_key)
+    
+    # ==================== QUICK EXAMPLES ====================
+    st.markdown("### Quick Examples")
+    
+    example_cols = st.columns(3)
+    
+    with example_cols[0]:
+        if st.button("Invoice Example", width='stretch'):
+            st.session_state.ai_example_text = """INVOICE #: INV-2024-001
+Date: January 15, 2024
+Customer: Acme Corporation
+Contact: sales@acme.com | +1-555-123-4567
+
+ITEMS:
+1. Widget Pro - 2 units @ $49.99 = $99.98
+2. Premium Support - 1 year @ $199.00 = $199.00
+
+SUBTOTAL: $298.98
+TAX (8%): $23.92
+TOTAL: $322.90
+
+Payment Terms: Net 30
+Due Date: February 14, 2024"""
+            st.rerun()
+    
+    with example_cols[1]:
+        if st.button("Contact List", width='stretch'):
+            st.session_state.ai_example_text = """Name, Email, Phone, Department
+John Smith, john@company.com, 555-0101, Sales
+Sarah Johnson, sarah@company.com, 555-0102, Marketing
+Mike Brown, mike@company.com, 555-0103, Engineering
+Lisa Wang, lisa@company.com, 555-0104, HR
+David Lee, david@company.com, 555-0105, Finance"""
+            st.rerun()
+    
+    with example_cols[2]:
+        if st.button("Product Inventory", width='stretch'):
+            st.session_state.ai_example_text = """Product ID | Product Name | Category | Price | Stock
+PROD-001 | Laptop Pro | Electronics | $1,299.00 | 45
+PROD-002 | Wireless Mouse | Accessories | $49.99 | 120
+PROD-003 | Monitor 27" | Electronics | $349.99 | 28
+PROD-004 | Keyboard RGB | Accessories | $89.99 | 75
+PROD-005 | USB-C Hub | Accessories | $29.99 | 200"""
+            st.rerun()
+    
+    # ==================== PROCESS BUTTON ====================
     if raw_text and len(raw_text) > 10 and selected_features:
-        if st.button("Process with AI", type="primary", width='stretch'):
-            with st.spinner("Processing..."):
-                # Process with AI
-                results = st.session_state.ai_orchestrator.process(raw_text, selected_features)
-                
-                # Store results
-                st.session_state.ai_results = results
-                
-                st.success("Processing complete!")
+        st.markdown("---")
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("PROCESS WITH AI", type="primary", width='stretch', use_container_width=True):
+                with st.spinner("AI is processing your data..."):
+                    # Process with AI
+                    results = st.session_state.ai_orchestrator.process(raw_text, selected_features)
+                    
+                    # Store results
+                    st.session_state.ai_results = results
+                    
+                    # Show success
+                    st.success("AI processing complete!")
     
-    # Display Results
+    # ==================== DISPLAY RESULTS ====================
     if 'ai_results' in st.session_state:
         results = st.session_state.ai_results
         
         st.markdown("---")
-        st.markdown("## Results")
+        st.markdown("## AI Processing Results")
         
-        # Show extracted data if available
-        if results.get("dataframe") is not None and not results["dataframe"].empty:
-            df = results["dataframe"]
-            
+        # Stats Cards
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            success_count = sum(1 for r in results["features"].values() if r.get("success"))
+            total_count = len(results["features"])
+            st.metric("Features", f"{success_count}/{total_count}")
+        
+        with col2:
+            if results.get("dataframe") is not None:
+                st.metric("Rows", len(results["dataframe"]))
+            else:
+                st.metric("Rows", "N/A")
+        
+        with col3:
+            if results.get("dataframe") is not None:
+                st.metric("Columns", len(results["dataframe"].columns))
+            else:
+                st.metric("Columns", "N/A")
+        
+        with col4:
+            providers = set()
+            for r in results["features"].values():
+                if r.get("success"):
+                    providers.add(r.get("provider", "Unknown"))
+            st.metric("Providers", len(providers))
+        
+        # Display Extracted Data
+        if results.get("dataframe") is not None:
             st.markdown("### Extracted Data")
-            st.dataframe(df, width='stretch', height=300)
             
-            # Show basic info
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Rows", len(df))
-            with col2:
-                st.metric("Columns", len(df.columns))
-            with col3:
-                st.metric("Extraction Method", results["features"]["extract"].get("provider", "local"))
+            df = results["dataframe"]
+            st.dataframe(df, width='stretch', height=350)
             
-            # Export options
-            st.markdown("### Export")
-            col1, col2 = st.columns(2)
+            # Feature Results
+            st.markdown("### AI Analysis Results")
             
-            with col1:
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    "Download CSV",
-                    csv,
-                    "extracted_data.csv",
-                    "text/csv",
-                    width='stretch'
-                )
+            for feature_name, feature_result in results["features"].items():
+                with st.expander(f"{feature_name.title()}", expanded=True):
+                    if feature_result.get("success"):
+                        st.success("Success")
+                        
+                        if feature_name == "extract":
+                            st.info(f"Extracted {len(df)} rows")
+                        
+                        elif feature_name == "summarize":
+                            content = feature_result.get("content", "")
+                            st.write(content)
+                        
+                        elif feature_name == "translate":
+                            content = feature_result.get("content", "")
+                            st.write(content)
+                        
+                        elif feature_name == "insights":
+                            content = feature_result.get("content", "")
+                            st.write(content)
+                        
+                        # Show provider info
+                        provider = feature_result.get("provider", "Unknown")
+                        processing_time = feature_result.get("processing_time", 0)
+                        st.caption(f"Provider: {provider} | Time: {processing_time:.2f}s")
+                    
+                    else:
+                        st.error(f"Failed: {feature_result.get('error', 'Unknown error')}")
             
-            with col2:
-                if st.button("Use in Main App", width='stretch'):
+            # Export Section
+            st.markdown("---")
+            st.markdown("### Export Options")
+            
+            export_cols = st.columns(5)
+            
+            with export_cols[0]:
+                csv_data = results["export_formats"].get("csv", "")
+                if csv_data:
+                    st.download_button(
+                        label="CSV",
+                        data=csv_data,
+                        file_name="ai_data.csv",
+                        mime="text/csv",
+                        width='stretch'
+                    )
+            
+            with export_cols[1]:
+                excel_data = results["export_formats"].get("excel")
+                if excel_data:
+                    st.download_button(
+                        label="Excel",
+                        data=excel_data,
+                        file_name="ai_data.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        width='stretch'
+                    )
+            
+            with export_cols[2]:
+                json_data = results["export_formats"].get("json", "")
+                if json_data:
+                    st.download_button(
+                        label="JSON",
+                        data=json_data,
+                        file_name="ai_data.json",
+                        mime="application/json",
+                        width='stretch'
+                    )
+            
+            with export_cols[3]:
+                # Generate Markdown Report
+                if st.button("Generate Report", width='stretch'):
+                    report = generate_ai_report(results)
+                    st.download_button(
+                        label="Download Report",
+                        data=report,
+                        file_name="ai_report.md",
+                        mime="text/markdown",
+                        width='stretch'
+                    )
+            
+            with export_cols[4]:
+                # Send to main app
+                if st.button("Use in App", width='stretch'):
                     st.session_state.df = df
                     st.success("Data loaded! Switch to 'Detect' tab.")
         
-        # Show other feature results
-        for feature_name in ["summarize", "insights"]:
-            if feature_name in results["features"]:
-                feature_result = results["features"][feature_name]
-                
-                if feature_result.get("success"):
-                    st.markdown(f"### {feature_name.title()}")
-                    
-                    content = feature_result.get("content", "")
-                    if content:
-                        st.write(content)
-        
-        # If extraction failed, show error
-        if "extract" in results["features"] and not results["features"]["extract"].get("success"):
-            st.warning("Could not extract structured data. The text might not contain table-like data.")
-    
-    # Examples
-    with st.expander("Examples", expanded=False):
-        example_cols = st.columns(2)
-        
-        with example_cols[0]:
-            if st.button("Load Example 1", width='stretch'):
-                st.session_state.example_text = """Product ID, Product Name, Category, Price, Stock
-PROD-001, Laptop Pro, Electronics, $1299.00, 45
-PROD-002, Wireless Mouse, Accessories, $49.99, 120
-PROD-003, Monitor 27", Electronics, $349.99, 28"""
-        
-        with example_cols[1]:
-            if st.button("Load Example 2", width='stretch'):
-                st.session_state.example_text = """Name: John Smith
-Email: john@company.com
-Phone: 555-0101
-Department: Sales
+        else:
+            st.info("No structured data extracted. Try different text or features.")
 
-Name: Sarah Johnson  
-Email: sarah@company.com
-Phone: 555-0102
-Department: Marketing"""
+def extract_text_from_file(uploaded_file):
+    """Extract text from uploaded file"""
+    import io
     
-    # Load example if set
-    if 'example_text' in st.session_state:
-        raw_text = st.session_state.example_text
+    if uploaded_file.name.endswith('.pdf'):
+        import PyPDF2
+        pdf_reader = PyPDF2.PdfReader(io.BytesIO(uploaded_file.getvalue()))
+        return "".join([page.extract_text() for page in pdf_reader.pages])
+    
+    elif uploaded_file.name.endswith(('.doc', '.docx')):
+        import docx
+        doc = docx.Document(io.BytesIO(uploaded_file.getvalue()))
+        return "\n".join([para.text for para in doc.paragraphs])
+    
+    else:
+        return uploaded_file.getvalue().decode('utf-8')
+
+def generate_ai_report(results: Dict) -> str:
+    """Generate markdown report from AI results"""
+    report = f"""# AI Data Analysis Report
+Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## Overview
+- Original text length: {len(results.get('original_text', ''))} characters
+- Features processed: {len(results.get('features', {}))}
+- Successful features: {sum(1 for r in results.get('features', {}).values() if r.get('success'))}
+
+## Features Executed
+"""
+    
+    for feature_name, feature_result in results.get("features", {}).items():
+        status = "Success" if feature_result.get("success") else "Failed"
+        provider = feature_result.get("provider", "N/A")
+        time_taken = feature_result.get("processing_time", 0)
+        
+        report += f"- **{feature_name.title()}**: {status} (Provider: {provider}, Time: {time_taken:.2f}s)\n"
+    
+    if results.get("dataframe") is not None:
+        df = results["dataframe"]
+        report += f"""
+## Extracted Data
+- Rows: {len(df)}
+- Columns: {len(df.columns)}
+- Total cells: {len(df) * len(df.columns)}
+
+### Column Summary
+"""
+        for col in df.columns:
+            non_null = df[col].notna().sum()
+            unique = df[col].nunique()
+            dtype = str(df[col].dtype)
+            report += f"- **{col}**: {non_null} non-null, {unique} unique values ({dtype})\n"
+    
+    report += "\n---\n*Generated by Smart Data Organizer AI*"
+    return report

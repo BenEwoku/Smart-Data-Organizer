@@ -1986,6 +1986,59 @@ with tab4:
                 except Exception:
                     st.error("Excel export failed")
                     st.info("Please use the CSV export instead")
+        
+        with st.expander("Final Preview"):
+            st.dataframe(df_export, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # ADD BACK THE CONVERSION TRACKING BUTTONS
+        st.markdown("### Next Steps")
+        
+        col_reset1, col_reset2, col_reset3 = st.columns(3)
+        
+        with col_reset1:
+            if st.button("Save & Start New", type="primary", use_container_width=True):
+                # Increment conversion count since user completed this conversion
+                increment_conversion_count(st.session_state.user_email)
+                
+                # Reset for new conversion
+                st.session_state.df = None
+                st.session_state.data_structure = None
+                st.session_state.df_organized = None
+                st.session_state.file_processed = False
+                st.session_state.data_cleaned = False
+                st.session_state.structure_detected = False
+                st.session_state.last_uploaded_file = None
+                
+                st.success("Conversion completed! Starting new conversion...")
+                st.rerun()
+        
+        with col_reset2:
+            if st.button("Reset Current", type="secondary", use_container_width=True):
+                # Reset current data without counting as new conversion
+                st.session_state.df_organized = None
+                st.info("Data reset. You can reorganize without starting over.")
+                st.rerun()
+        
+        with col_reset3:
+            if st.button("Return to Start", type="secondary", use_container_width=True):
+                # Go back to Tab 1 without resetting
+                st.info("Returning to Input tab...")
+                # Note: In Streamlit, we can't directly switch tabs programmatically
+                # But we can suggest user to click on Tab 1
+                st.markdown("Please click on the **Input** tab above to add new data")
+        
+        # Show conversion count info
+        from utils.auth import get_conversions_remaining
+        remaining = get_conversions_remaining(user)
+        limit = user.get('conversion_limit', 3) if user['tier'] == 'free' else 'Unlimited'
+        
+        st.markdown("---")
+        st.info(f"**Conversions this month:** {user.get('conversions_used', 0)} used, {remaining} remaining (Limit: {limit})")
+        
+    else:
+        st.info("Please organize your data in the Organize tab first")
 
 # Add to your tab definitions at the top of main content
 #tab1, tab2, tab3, tab4, tab5 = st.tabs(["Input", "Detect", "Organize", "Export", "Impute"])

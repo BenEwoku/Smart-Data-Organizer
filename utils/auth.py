@@ -310,7 +310,7 @@ def demote_from_admin(email):
         return False, "Failed to update user"
 
 def get_all_users():
-    """Get all users (admin only) - Now from Google Sheets"""
+    """Get all users (admin only) - Now from Google Sheets with 2-tier validation"""
     # Try to get from Google Sheets first
     sheet_users = gsheets_db.get_all_users_from_sheet()
     
@@ -324,6 +324,16 @@ def get_all_users():
             if isinstance(is_admin_flag, str):
                 # Convert string "TRUE"/"FALSE" to boolean
                 user['is_admin'] = is_admin_flag.upper() == 'TRUE'
+            
+            # ========== ADD TIER VALIDATION HERE ==========
+            # Ensure tier is only 'free' or 'pro'
+            current_tier = user.get('tier', 'free').lower()
+            if current_tier not in ['free', 'pro']:
+                # Convert any other tier to 'free'
+                user['tier'] = 'free'
+            else:
+                user['tier'] = current_tier  # Ensure lowercase
+            # ========== END TIER VALIDATION ==========
         
         return sheet_users
     
@@ -331,10 +341,19 @@ def get_all_users():
     users = load_users()
     user_list = []
     for email, user_data in users.items():
+        # ========== ADD TIER VALIDATION HERE TOO ==========
+        current_tier = user_data.get('tier', 'free').lower()
+        if current_tier not in ['free', 'pro']:
+            # Convert any other tier to 'free'
+            corrected_tier = 'free'
+        else:
+            corrected_tier = current_tier
+        # ========== END TIER VALIDATION ==========
+        
         user_list.append({
             'email': email,
             'name': user_data['name'],
-            'tier': user_data['tier'],
+            'tier': corrected_tier,  # Use validated tier
             'conversions_used': user_data.get('conversions_used', 0),
             'created_at': user_data['created_at'],
             'last_login': user_data.get('last_login', 'Never'),
@@ -342,9 +361,21 @@ def get_all_users():
         })
     
     return user_list
+    
 
 def update_user_tier(email, new_tier):
-    """Update user's subscription tier - Now updates Google Sheets"""
+    """Update user's subscription tier - Now updates Google Sheets with validation"""
+    
+    # ========== ADD TIER VALIDATION ==========
+    # Convert to lowercase and validate
+    new_tier = str(new_tier).lower().strip()
+    
+    # Only allow 'free' or 'pro'
+    if new_tier not in ['free', 'pro']:
+        print(f"ERROR: Invalid tier '{new_tier}' for {email}. Must be 'free' or 'pro'.")
+        return False
+    # ========== END VALIDATION ==========
+    
     # Update in Google Sheets
     success = gsheets_db.update_user_in_sheet(email, {'tier': new_tier})
     
@@ -364,22 +395,126 @@ def update_user_tier(email, new_tier):
     return False
 
 def update_user(email, updates):
-    """Update user data (admin only) - Proper cache handling"""
-    # Update in Google Sheets
-    success = gsheets_db.update_user_in_sheet(email, updates)
+    """Update user data - delegates to specific functions"""
     
-    if success:
-        import streamlit as st
+    if 'tier' in updates and len(updates) == 1:
+        # Just updating tier - use the specialized function
+        # ========== ADD VALIDATION HERE ==========
+        tier_value = str(updates['tier']).lower().strip()
+        if tier_value not in ['free', 'pro']:
+            print(f"ERROR: Invalid tier '{tier_value}'. Must be 'free' or 'pro'.")
+            return False
+        # ========== END VALIDATION ==========
+        return update_user_tier(email, tier_value)
+    
+    # Handle multiple field updates
+    validated_updates = {}
+    
+    for key, value in updates.items():
+        if key == 'tier':
+            # Validate tier first
+            tier_value = str(value).lower().strip()
+            if tier_value not in ['free', 'pro']:
+                print(f"ERROR: Invalid tier '{tier_value}'. Must be 'free' or 'pro'.")
+                return False
+            
+            # Use update_user_tier for tier changes
+            if update_user_tier(email, tier_value):
+                validated_updates[key] = tier_value
+            else:
+                return False
         
-        # Clear THIS user's cache specifically
-        clear_user_cache(email)
+        elif key == 'conversions_used':
+            try:
+                validated_updates[key] = int(value)
+            except:
+                validated_updates[key] = 0
         
-        # If this is the current logged-in user, refresh session
-        if st.session_state.get('user_email') == email:
-            refresh_current_user_session()
+        elif key == 'is_admin':
+            if isinstance(value, str):
+                validated_updates[key] = value.upper() == 'TRUE'
+            else:
+                validated_updates[key] = bool(value)
         
-        return True
+        else:
+            validated_updates[key] = value
+    
+    # Update remaining fields in Google Sheets
+    if validated_updates:
+        success = gsheets_db.update_user_in_sheet(email, validated_updates)
+        
+        if success:
+            clear_user_cache(email)
+            if st.session_state.get('user_email') == email:
+                refresh_current_user_session()
+            return True
+    
     return False
+
+# Add these to utils/auth.py
+
+def upgrade_user_to_pro(email):
+    """Upgrade user to Pro tier - returns success status"""
+    try:
+        return update_user(email, {'tier': 'pro'})
+    except:
+        return False
+
+def downgrade_user_to_free(email):
+    """Downgrade user to Free tier - returns success status"""
+    try:
+        return update_user(email, {'tier': 'free'})
+    except:
+        return False
+
+def is_pro_user(email):
+    """Check if user has Pro tier"""
+    try:
+        user = get_user_from_sheet(email)
+        if user:
+            tier = user.get('tier', 'free').lower()
+            return tier == 'pro'
+        return False
+    except:
+        return False
+
+def is_free_user(email):
+    """Check if user has Free tier"""
+    try:
+        user = get_user_from_sheet(email)
+        if user:
+            tier = user.get('tier', 'free').lower()
+            return tier == 'free'
+        return True  # Default to free
+    except:
+        return True
+
+def get_user_tier(email):
+    """Get user's tier (free/pro)"""
+    try:
+        user = get_user_from_sheet(email)
+        if user:
+            tier = user.get('tier', 'free').lower()
+            return tier if tier in ['free', 'pro'] else 'free'
+        return 'free'
+    except:
+        return 'free'
+
+def bulk_upgrade_users(emails):
+    """Upgrade multiple users at once"""
+    success_count = 0
+    for email in emails:
+        if upgrade_user_to_pro(email):
+            success_count += 1
+    return success_count
+
+def bulk_downgrade_users(emails):
+    """Downgrade multiple users at once"""
+    success_count = 0
+    for email in emails:
+        if downgrade_user_to_free(email):
+            success_count += 1
+    return success_count
 
 def refresh_current_user_session():
     """Refresh current user's session data from database"""
@@ -487,14 +622,14 @@ def increment_scrape_count(email):
         save_users(users_df)
 
 def get_conversion_limit(tier):
-    """Get conversion limit based on tier"""
-    limits = {
-        'free': 50,  # Increased for development
-        'pro': float('inf'),
-        'analyst': float('inf'),
-        'business': float('inf')
-    }
-    return limits.get(tier, 50)
+    """Get conversion limit based on tier - UPDATED FOR 2 TIERS"""
+    if tier == 'pro':
+        return float('inf')  # Unlimited for Pro
+    else:  # free tier
+        # Get from system settings if available
+        if 'system_settings' in st.session_state:
+            return st.session_state.system_settings.get('free_conversions', 50)
+        return 50  # Default
 
 def can_convert(user_data):
     """Check if user can perform a conversion"""
@@ -597,7 +732,7 @@ def show_login_page():
                             login_user(email)
                             st.success(message)
                             if sheets_connected:
-                                st.info("✅ Connected to persistent database")
+                                st.info("Connected to persistent database")
                             # Small delay before rerun to show success message
                             time.sleep(0.5)
                             st.rerun()
@@ -607,7 +742,7 @@ def show_login_page():
                     st.warning("Please enter email and password")
         
         # Demo credentials hint
-        with st.expander("📝 Demo Credentials"):
+        with st.expander("Demo Credentials"):
             st.info("""
             **Demo Account:**
             - Email: demo@example.com
@@ -668,7 +803,7 @@ def show_user_sidebar():
         if sheets_connected and st.session_state.user_email:
             sheet_user = gsheets_db.get_user_from_sheet(st.session_state.user_email)
             if sheet_user:
-                st.sidebar.caption("✅ Persistent account")
+                st.sidebar.caption("Persistent account")
         
         # Tier badge
         tier = user['tier'].upper()

@@ -80,12 +80,12 @@ def show_simple_auto_pricing():
                 
                 with col_pay1:
                     st.markdown("**PayPal**")
-                    st.code("Send $5.00 USD to:\npayments@smartdata.com")
+                    st.code("Send $5.00 USD to:\nbewoku14@outlook.com")
                     st.caption("Note: Include code & your email")
                 
                 with col_pay2:
                     st.markdown("**Mobile Money (Uganda)**")
-                    st.code("Send 18,500 UGX to:\n0773 123 456 (MTN)")
+                    st.code("Send 18,500 UGX to:\n+256 774 617 788 (MTN)")
                     st.caption("Reference: Your code")
             
             # Code verification
@@ -102,9 +102,9 @@ def show_simple_auto_pricing():
             with col_verify1:
                 if entered_code:
                     if verify_upgrade_code(entered_code, user_email):
-                        st.success("✅ Code is valid!")
+                        st.success("Code is valid!")
                     else:
-                        st.error("❌ Invalid or expired code")
+                        st.error("Invalid or expired code")
             
             with col_verify2:
                 if st.button("Upgrade Now", type="primary", use_container_width=True):

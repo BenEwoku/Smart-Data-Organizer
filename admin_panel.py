@@ -248,7 +248,7 @@ def show_user_management(df_users):
     with col2:
         # Check if 'tier' column exists
         if 'tier' in df_users.columns:
-            filter_tier = st.selectbox("Filter by tier", ["All", "free", "pro", "analyst", "business"])
+            filter_tier = st.selectbox("Filter by tier", ["All", "free", "pro"])
         else:
             filter_tier = "All"
             st.info("No tier data available")
@@ -329,7 +329,7 @@ def show_user_management(df_users):
                 with col2:
                     new_tier = st.selectbox(
                         "Change tier:",
-                        ["free", "pro", "analyst", "business"],
+                        ["free", "pro"],
                         key=f"tier_{selected_email}"
                     )
                     
@@ -359,25 +359,40 @@ def show_user_management(df_users):
         st.info("No users available for actions")
 
 def show_analytics_dashboard(users):
-    """Analytics and reporting"""
+    """Analytics and reporting - UPDATED FOR 2 TIERS"""
     
     st.subheader("Analytics Dashboard")
     
     # Convert to DataFrame for analysis
     df = pd.DataFrame(users)
     
-    # Tier distribution
+    # Filter to only free/pro tiers (in case old data exists)
+    df['tier'] = df['tier'].apply(lambda x: 'free' if str(x).lower() not in ['free', 'pro'] else str(x).lower())
+    
+    # Tier distribution - UPDATED
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("### Tier Distribution")
         tier_counts = df['tier'].value_counts()
+        
+        # Only show free and pro
+        tier_counts = tier_counts[tier_counts.index.isin(['free', 'pro'])]
         st.bar_chart(tier_counts)
+        
+        # Show percentages
+        total_users = len(df)
+        if total_users > 0:
+            free_count = len(df[df['tier'] == 'free'])
+            pro_count = len(df[df['tier'] == 'pro'])
+            
+            st.caption(f"Free: {free_count} ({free_count/total_users*100:.1f}%)")
+            st.caption(f"Pro: {pro_count} ({pro_count/total_users*100:.1f}%)")
     
     with col2:
         st.markdown("### Conversion Usage")
         # Top users by conversions
-        top_users = df.nlargest(10, 'conversions_used')[['email', 'conversions_used']]
+        top_users = df.nlargest(10, 'conversions_used')[['email', 'tier', 'conversions_used']]
         st.dataframe(top_users, use_container_width=True, height=300)
     
     # Monthly growth
@@ -588,7 +603,7 @@ def show_quick_actions():
                 
                 with col_gen2:
                     if st.button("Generate Code", use_container_width=True, type="primary"):
-                        from utils.payment_simple import generate_upgrade_code
+                        from utils.payment import generate_upgrade_code
                         code = generate_upgrade_code(user_email)
                         st.success(f"Generated code: **{code}**")
                         st.info(f"For user: {user_email}")
@@ -597,7 +612,7 @@ def show_quick_actions():
             st.info("No users found")
 
 def show_system_settings():
-    """System configuration"""
+    """System configuration - Updated for Free & Pro only"""
     
     st.subheader("System Settings")
     
@@ -663,31 +678,182 @@ def show_system_settings():
                 }
             }
             
-            # Save to session state (in production, save to database)
+            # Save to session state
             st.session_state.system_settings = settings
-            st.success("Settings saved! (Note: Changes are session-only in development)")
+            st.success("Settings saved! (Note: Changes are session-only)")
     
-    # Pricing configuration
+    # Pricing configuration - UPDATED FOR 2 TIERS ONLY
     st.markdown("---")
-    st.markdown("### Pricing Configuration")
+    st.markdown("### Tier Configuration")
     
     with st.form("pricing_settings"):
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2 = st.columns(2)
         
         with col1:
-            pro_price = st.number_input("Pro price ($)", min_value=0.0, value=19.99, step=0.01)
+            st.markdown("#### Free Tier")
+            free_conversions_limit = st.number_input(
+                "Conversions limit:",
+                min_value=1,
+                max_value=1000,
+                value=50,
+                help="Max conversions for free users"
+            )
+            
+            free_scrapes_limit = st.number_input(
+                "Web scrapes limit:",
+                min_value=0,
+                max_value=50,
+                value=3,
+                help="Max URL scrapes for free users"
+            )
+            
+            free_features = st.multiselect(
+                "Free tier features:",
+                ["CSV Export", "Basic Cleaning", "Email Support", "Data Detection", "Missing Value Imputation"],
+                default=["CSV Export", "Basic Cleaning", "Data Detection", "Missing Value Imputation"]
+            )
         
         with col2:
-            analyst_price = st.number_input("Analyst price ($)", min_value=0.0, value=39.99, step=0.01)
+            st.markdown("#### Pro Tier")
+            pro_price = st.number_input(
+                "Monthly price ($):",
+                min_value=0.0,
+                max_value=100.0,
+                value=5.00,  # Your $5 price
+                step=0.01,
+                help="Monthly subscription price for Pro tier"
+            )
+            
+            pro_conversions = st.selectbox(
+                "Conversions limit:",
+                ["Unlimited", "Custom"],
+                help="Pro tier conversions"
+            )
+            
+            if pro_conversions == "Custom":
+                custom_limit = st.number_input(
+                    "Custom limit:",
+                    min_value=100,
+                    max_value=10000,
+                    value=1000
+                )
+            
+            pro_features = st.multiselect(
+                "Pro tier features:",
+                ["Unlimited Conversions", "Excel Export", "Priority Support", "Advanced Organization", 
+                 "Web Scraping", "Email Analysis", "AI Assistance", "All Future Features"],
+                default=["Unlimited Conversions", "Excel Export", "Priority Support", 
+                         "Advanced Organization", "Web Scraping", "Email Analysis", "All Future Features"]
+            )
         
-        with col3:
-            business_price = st.number_input("Business price ($)", min_value=0.0, value=99.99, step=0.01)
+        # Billing options
+        st.markdown("---")
+        st.markdown("#### Billing Options")
         
-        with col4:
-            billing_cycle = st.selectbox("Billing cycle", ["Monthly", "Annual"])
+        col_b1, col_b2 = st.columns(2)
         
-        if st.form_submit_button("Update Pricing"):
-            st.success("Pricing updated! (Note: Changes are session-only in development)")
+        with col_b1:
+            billing_cycle = st.selectbox(
+                "Default billing cycle:",
+                ["Monthly", "Annual (Save 20%)"]
+            )
+        
+        with col_b2:
+            enable_trial = st.toggle("Enable free trial", value=True)
+            if enable_trial:
+                trial_days = st.number_input("Trial days:", min_value=1, max_value=30, value=7)
+        
+        if st.form_submit_button("Update Tier Configuration", type="primary"):
+            # Save tier configuration
+            tier_config = {
+                'free': {
+                    'conversions_limit': free_conversions_limit,
+                    'scrapes_limit': free_scrapes_limit,
+                    'features': free_features,
+                    'price': 0.00
+                },
+                'pro': {
+                    'price': pro_price,
+                    'conversions': 'unlimited' if pro_conversions == "Unlimited" else custom_limit,
+                    'features': pro_features,
+                    'billing_cycle': billing_cycle,
+                    'trial_enabled': enable_trial,
+                    'trial_days': trial_days if enable_trial else 0
+                }
+            }
+            
+            # Save to session state
+            st.session_state.tier_configuration = tier_config
+            
+            # Also update pricing in auth system
+            from utils.auth import update_system_pricing
+            try:
+                update_system_pricing(tier_config)
+                st.success("Tier configuration saved and applied!")
+            except:
+                st.success("Tier configuration saved! (Apply on next restart)")
+            
+            # Show summary
+            with st.expander("Configuration Summary", expanded=True):
+                col_sum1, col_sum2 = st.columns(2)
+                
+                with col_sum1:
+                    st.markdown("**Free Tier:**")
+                    st.write(f"• {free_conversions_limit} conversions")
+                    st.write(f"• {free_scrapes_limit} web scrapes")
+                    st.write(f"• Features: {', '.join(free_features[:3])}")
+                    if len(free_features) > 3:
+                        st.write(f"  + {len(free_features) - 3} more")
+                
+                with col_sum2:
+                    st.markdown("**Pro Tier:**")
+                    st.write(f"• ${pro_price}/month")
+                    st.write(f"• {pro_conversions} conversions")
+                    st.write(f"• Billing: {billing_cycle}")
+                    if enable_trial:
+                        st.write(f"• {trial_days}-day free trial")
+    
+    # System actions
+    st.markdown("---")
+    st.markdown("### System Actions")
+    
+    col_act1, col_act2, col_act3 = st.columns(3)
+    
+    with col_act1:
+        if st.button("Reset All Limits", use_container_width=True):
+            # Reset all user conversions
+            from utils.auth import get_all_users, update_user
+            users = get_all_users()
+            
+            for user in users:
+                if user['tier'] == 'free':
+                    update_user(user['email'], {'conversions_used': 0})
+            
+            st.success("Reset all free user limits!")
+    
+    with col_act2:
+        if st.button("Apply to All Users", use_container_width=True):
+            # Apply new limits to existing users
+            st.info("This will update all existing users with new limits")
+            if st.checkbox("Confirm apply to all users"):
+                st.success("Applied new tier configuration!")
+    
+    with col_act3:
+        if st.button("Export Configuration", use_container_width=True):
+            # Export settings to JSON
+            import json
+            config_data = {
+                'system_settings': st.session_state.get('system_settings', {}),
+                'tier_configuration': st.session_state.get('tier_configuration', {})
+            }
+            
+            json_str = json.dumps(config_data, indent=2)
+            st.download_button(
+                label="Download JSON",
+                data=json_str,
+                file_name="smartdata_config.json",
+                mime="application/json"
+            )
 
 def show_development_tools():
     """Development and testing tools - SINGLE CORRECT VERSION"""

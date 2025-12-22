@@ -26,6 +26,8 @@ from email.header import decode_header
 import re
 from datetime import datetime
 from io import BytesIO  # <-- ADD THIS LINE
+import requests
+from requests.exceptions import Timeout, ConnectionError, SSLError
 #from ai_organizer import show_ai_organizer_tab #for tab6
 
 

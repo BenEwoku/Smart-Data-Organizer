@@ -668,13 +668,13 @@ def show_login_page():
     
     if not sheets_connected:
         st.warning("""
-        **⚠️ DATABASE NOT INITIALIZED**
+        **DATABASE NOT INITIALIZED**
         
         The Google Sheet database needs to be set up with demo accounts.
         """)
         
         # Add initialization button
-        if st.button("🔧 Initialize Database (Click Once)", type="primary", use_container_width=True):
+        if st.button("Initialize Database (Click Once)", type="primary", use_container_width=True):
             with st.spinner("Creating database and demo accounts..."):
                 # Create the sheet
                 worksheet = gsheets_db.get_or_create_sheet()
@@ -685,7 +685,7 @@ def show_login_page():
                     
                     if added > 0:
                         st.success(f"""
-                        ✅ **Database Initialized Successfully!**
+                        **Database Initialized Successfully!**
                         
                         {added} demo accounts created.
                         

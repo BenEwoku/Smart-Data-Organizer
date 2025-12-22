@@ -647,7 +647,7 @@ def show_login_page():
                         success, message = save_user(email, password, name)
                         if success:
                             if sheets_connected:
-                                st.success(f"{message} ✅ Saved to database")
+                                st.success(f"{message} Saved to database")
                             else:
                                 st.success(f"{message} (Local session only)")
                             st.info("You can now login with your credentials")

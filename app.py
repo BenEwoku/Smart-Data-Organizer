@@ -2730,7 +2730,7 @@ with tab4:
         col_reset1, col_reset2, col_reset3 = st.columns(3)
         
         with col_reset1:
-            if st.button("📥 Save & Start New", type="primary", use_container_width=True):
+            if st.button("Save & Start New", type="primary", use_container_width=True):
                 # Increment conversion count since user completed this conversion
                 increment_conversion_count(st.session_state.user_email)
                 
@@ -2747,14 +2747,14 @@ with tab4:
                 st.rerun()
         
         with col_reset2:
-            if st.button("🔄 Reset Current", type="secondary", use_container_width=True):
+            if st.button("Reset Current", type="secondary", use_container_width=True):
                 # Reset current data without counting as new conversion
                 st.session_state.df_organized = None
                 st.info("Data reset. You can reorganize without starting over.")
                 st.rerun()
         
         with col_reset3:
-            if st.button("🏠 Return to Start", type="secondary", use_container_width=True):
+            if st.button("Return to Start", type="secondary", use_container_width=True):
                 # Go back to Tab 1 without resetting
                 st.info("Returning to Input tab...")
                 # Note: In Streamlit, we can't directly switch tabs programmatically

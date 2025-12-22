@@ -850,3 +850,56 @@ def migrate_session_to_sheets():
                 migrated += 1
     
     return migrated
+
+def update_system_pricing(tier_config):
+    """Update system pricing configuration"""
+    try:
+        # Store in session state for now
+        # In production, save to database or config file
+        import streamlit as st
+        st.session_state.tier_configuration = tier_config
+        
+        # Also update the conversion limits in session
+        if 'free' in tier_config:
+            if 'system_settings' not in st.session_state:
+                st.session_state.system_settings = {}
+            st.session_state.system_settings['free_conversions'] = tier_config['free'].get('conversions_limit', 50)
+            st.session_state.system_settings['free_scrapes'] = tier_config['free'].get('scrapes_limit', 3)
+        
+        return True
+    except Exception as e:
+        print(f"Error updating system pricing: {str(e)}")
+        return False
+
+def get_free_conversion_limit():
+    """Get free tier conversion limit from system settings"""
+    import streamlit as st
+    
+    # Check tier configuration first
+    if 'tier_configuration' in st.session_state:
+        return st.session_state.tier_configuration.get('free', {}).get('conversions_limit', 50)
+    
+    # Fallback to system settings
+    elif 'system_settings' in st.session_state:
+        return st.session_state.system_settings.get('free_conversions', 50)
+    
+    # Default
+    return 50
+
+def get_free_scrape_limit():
+    """Get free tier web scrape limit"""
+    import streamlit as st
+    
+    if 'tier_configuration' in st.session_state:
+        return st.session_state.tier_configuration.get('free', {}).get('scrapes_limit', 3)
+    elif 'system_settings' in st.session_state:
+        return st.session_state.system_settings.get('free_scrapes', 3)
+    return 3
+
+def get_pro_price():
+    """Get Pro tier price"""
+    import streamlit as st
+    
+    if 'tier_configuration' in st.session_state:
+        return st.session_state.tier_configuration.get('pro', {}).get('price', 5.00)
+    return 5.00

@@ -781,17 +781,19 @@ def show_system_settings():
                     'trial_days': trial_days if enable_trial else 0
                 }
             }
-            
-            # Save to session state
+
+            # Save tier configuration to session state
+            import streamlit as st
             st.session_state.tier_configuration = tier_config
-            
-            # Also update pricing in auth system
-            from utils.auth import update_system_pricing
-            try:
-                update_system_pricing(tier_config)
-                st.success("Tier configuration saved and applied!")
-            except:
-                st.success("Tier configuration saved! (Apply on next restart)")
+
+            # Also update system settings if free tier limits changed
+            if 'free' in tier_config:
+                if 'system_settings' not in st.session_state:
+                    st.session_state.system_settings = {}
+                st.session_state.system_settings['free_conversions'] = tier_config['free'].get('conversions_limit', 50)
+                st.session_state.system_settings['free_scrapes'] = tier_config['free'].get('scrapes_limit', 3)
+
+            st.success("Tier configuration saved!")
             
             # Show summary
             with st.expander("Configuration Summary", expanded=True):

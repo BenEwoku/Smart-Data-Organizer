@@ -23,7 +23,7 @@ def organize_time_series(df, date_col):
     """
     df = df.copy()
     
-    st.subheader("⏰ Time Series Organization")
+    st.subheader("Time Series Organization")
     
     col1, col2 = st.columns(2)
     
@@ -332,67 +332,81 @@ def organize_email_data(df):
     Returns:
         pd.DataFrame: Organized email data with email-specific metrics
     """
-    df = df.copy()
-    
-    st.subheader("📧 Email Data Organization")
+    df_organized = df.copy()
     
     # Check if this is actually email data
     email_columns = ['From', 'To', 'Subject', 'Date']
-    has_email_columns = all(col in df.columns for col in email_columns[:3])
+    has_email_columns = sum(1 for col in email_columns[:3] if col in df_organized.columns) >= 2
     
     if not has_email_columns:
-        st.warning("Data doesn't appear to contain standard email columns. Using general organization.")
-        return df
+        # Not enough email columns, return as-is
+        return df_organized
     
-    # Email-specific organization options
-    st.markdown("### Email Organization Options")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Sort by options
-        sort_by = st.selectbox(
-            "Sort emails by:",
-            ["Date (newest first)", "Date (oldest first)", "Sender (A-Z)", "Recipient (A-Z)", 
-             "Subject (A-Z)", "Priority Score", "Thread Activity"]
-        )
+    try:
+        # Sort by date if available
+        if 'Date' in df_organized.columns:
+            try:
+                # Convert to datetime if not already
+                if not pd.api.types.is_datetime64_any_dtype(df_organized['Date']):
+                    df_organized['Date'] = pd.to_datetime(df_organized['Date'], errors='coerce')
+                
+                # Sort by date (newest first)
+                df_organized = df_organized.sort_values('Date', ascending=False)
+            except:
+                pass
         
-        # Filter options
-        show_filters = st.checkbox("Apply email filters")
-    
-    with col2:
-        # Grouping options
-        group_by = st.selectbox(
-            "Group emails by:",
-            ["None", "Sender", "Recipient", "Date (day)", "Date (week)", "Date (month)", "Thread"]
-        )
+        # Add spam detection columns if not already present
+        if 'Spam_Score' not in df_organized.columns:
+            try:
+                from utils.detection import add_spam_columns_to_dataframe
+                df_organized = add_spam_columns_to_dataframe(df_organized)
+            except:
+                # Fallback: add simple spam columns
+                df_organized['Spam_Score'] = 0
+                df_organized['Is_Spam'] = False
         
-        # Analysis options
-        analysis_type = st.multiselect(
-            "Add email analysis:",
-            ["Sentiment Score", "Response Time", "Email Length", "Attachment Count", "Urgency Flag"],
-            default=["Response Time"]
-        )
-    
-    # Apply sorting
-    df = apply_email_sorting(df, sort_by)
-    
-    # Apply filters if enabled
-    if show_filters:
-        df = apply_email_filters(df)
-    
-    # Apply grouping
-    if group_by != "None":
-        df = apply_email_grouping(df, group_by)
-    
-    # Add requested analyses
-    for analysis in analysis_type:
-        df = add_email_analysis(df, analysis)
-    
-    # Show email-specific insights
-    show_email_insights(df)
-    
-    return df
+        # Ensure Is_Spam column exists
+        if 'Is_Spam' not in df_organized.columns and 'Spam_Score' in df_organized.columns:
+            df_organized['Is_Spam'] = df_organized['Spam_Score'] >= 70
+        
+        # Calculate email metrics if columns exist
+        if 'Body_Preview' in df_organized.columns:
+            # Add email length
+            df_organized['Email_Length'] = df_organized['Body_Preview'].astype(str).str.len()
+        
+        if 'Subject' in df_organized.columns:
+            # Add subject length
+            df_organized['Subject_Length'] = df_organized['Subject'].astype(str).str.len()
+        
+        # Add priority if not exists
+        if 'Priority_Score' not in df_organized.columns:
+            df_organized['Priority_Score'] = 50  # Default medium priority
+        
+        # Calculate response times if we have thread info and dates
+        if 'Thread_ID' in df_organized.columns and 'Date' in df_organized.columns:
+            try:
+                df_organized = calculate_response_times(df_organized)
+            except:
+                pass
+        
+        # Reorder columns for better readability
+        preferred_order = [
+            'Date', 'From', 'To', 'Subject', 'Body_Preview',
+            'Thread_ID', 'Response_Time_Hours', 'Priority_Score',
+            'Spam_Score', 'Is_Spam', 'Email_Length', 'Subject_Length'
+        ]
+        
+        # Get existing columns in preferred order, then others
+        existing_preferred = [col for col in preferred_order if col in df_organized.columns]
+        other_columns = [col for col in df_organized.columns if col not in existing_preferred]
+        
+        df_organized = df_organized[existing_preferred + other_columns]
+        
+        return df_organized
+        
+    except Exception as e:
+        print(f"Error organizing email data: {str(e)}")
+        return df.copy()
 
 def apply_email_sorting(df, sort_option):
     """Apply email-specific sorting"""

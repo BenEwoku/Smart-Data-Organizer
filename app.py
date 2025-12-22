@@ -55,7 +55,7 @@ def parse_mbox_file(mbox_file):
             # It's a file path
             mbox = mailbox.mbox(mbox_file)
         
-        st.info(f"📨 Found {len(mbox)} emails to process...")
+        st.info(f"Found {len(mbox)} emails to process...")
         
         for i, message in enumerate(mbox):
             try:
@@ -95,6 +95,8 @@ def parse_mbox_file(mbox_file):
                 
                 # Calculate priority score
                 priority_score = calculate_priority_score(subject, from_domain, body_preview)
+                # Calculate spam score
+                spam_score = calculate_spam_score(subject, from_domain, body_preview, from_email)
                 
                 emails.append({
                     'Email_ID': email_id,
@@ -107,7 +109,9 @@ def parse_mbox_file(mbox_file):
                     'Body_Preview': body_preview[:300] if body_preview else '',  # Limit preview
                     'Thread_ID': thread_id,
                     'Response_Time': None,  # Will be calculated later
-                    'Priority_Score': priority_score
+                    'Priority_Score': priority_score,
+                    'Spam_Score': spam_score,  # NEW: Spam score
+                    'Is_Spam': spam_score >= 70  # NEW: Spam flag (70+ = spam)
                 })
                 
                 # Progress update every 100 emails
@@ -164,6 +168,83 @@ def parse_mbox_file(mbox_file):
         
     except Exception as e:
         raise Exception(f"Error parsing MBOX file: {str(e)}")
+
+def calculate_spam_score(subject, domain, body, sender_email):
+    """Calculate spam score for an email"""
+    score = 0
+    
+    if subject:
+        subject_lower = subject.lower()
+        
+        # Spam keywords in subject
+        spam_keywords = [
+            'free', 'winner', 'prize', 'congratulations', 'lottery',
+            'urgent', 'asap', '!!!', '$$$', 'click here',
+            'limited time', 'special offer', 'risk-free',
+            'guaranteed', 'act now', 'buy now', 'order now'
+        ]
+        
+        for keyword in spam_keywords:
+            if keyword in subject_lower:
+                score += 10
+        
+        # All caps subject
+        if subject.isupper():
+            score += 15
+        
+        # Excessive punctuation
+        if subject.count('!') > 2:
+            score += 5
+        if subject.count('?') > 3:
+            score += 3
+    
+    # Suspicious domains
+    suspicious_domains = [
+        'promo.', 'offer.', 'discount.', 'deal.', 'sale.',
+        'newsletter.', 'marketing.', 'advertising.', 'bulk.'
+    ]
+    
+    if domain:
+        domain_lower = domain.lower()
+        for suspicious in suspicious_domains:
+            if suspicious in domain_lower:
+                score += 10
+    
+    # Generic sender addresses
+    generic_senders = [
+        'noreply@', 'no-reply@', 'newsletter@',
+        'notification@', 'info@', 'service@'
+    ]
+    
+    if sender_email:
+        sender_lower = sender_email.lower()
+        for generic in generic_senders:
+            if generic in sender_lower:
+                score += 8
+    
+    # Body content analysis
+    if body:
+        body_lower = body.lower()
+        
+        # Spam phrases in body
+        spam_phrases = [
+            'unsubscribe', 'opt-out', 'click to remove',
+            'money back', 'risk free', 'no obligation',
+            'this is not spam', 'legal disclaimer'
+        ]
+        
+        for phrase in spam_phrases:
+            if phrase in body_lower:
+                score += 5
+        
+        # Generic greetings
+        generic_greetings = ['dear friend', 'dear sir', 'dear madam']
+        for greeting in generic_greetings:
+            if greeting in body_lower[:100]:
+                score += 3
+    
+    # Cap score at 100
+    return min(score, 100)
 
 def extract_email_and_domain(header):
     """Extract email address and domain from header - always return strings"""
@@ -1481,7 +1562,7 @@ with tab2:
                 if entity_col:
                     with cols[1]:
                         if entity_col == 'From':
-                            st.success(f"**👤 Sender Column:** `{entity_col}`")
+                            st.success(f"**Sender Column:** `{entity_col}`")
                         elif entity_col == 'To':
                             st.success(f"**Recipient Column:** `{entity_col}`")
                         else:
@@ -1639,6 +1720,135 @@ with tab2:
             
             st.markdown("---")
         # ========== END EMAIL INSIGHTS ==========
+
+        # ========== SPAM DETECTION ANALYSIS ==========
+        if structure == "Email Data":
+            st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Spam Detection Analysis</h3>', unsafe_allow_html=True)
+            
+            from utils.detection import detect_spam_emails
+            
+            with st.spinner("Analyzing for spam emails..."):
+                spam_results = detect_spam_emails(df_clean)
+            
+            if spam_results and 'spam_count' in spam_results:
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Total Emails", len(df_clean))
+                
+                with col2:
+                    st.metric("Spam Emails", spam_results['spam_count'])
+                
+                with col3:
+                    st.metric("Ham Emails", spam_results['ham_count'])
+                
+                with col4:
+                    spam_pct = spam_results['spam_percentage']
+                    if spam_pct > 20:
+                        st.metric("Spam %", f"{spam_pct:.1f}%", delta="High", delta_color="inverse")
+                    elif spam_pct > 5:
+                        st.metric("Spam %", f"{spam_pct:.1f}%", delta="Moderate", delta_color="off")
+                    else:
+                        st.metric("Spam %", f"{spam_pct:.1f}%", delta="Low", delta_color="normal")
+                
+                # Show top spam emails
+                if spam_results['spam_count'] > 0:
+                    with st.expander(f"View Detected Spam Emails ({spam_results['spam_count']} found)", expanded=False):
+                        # Let user adjust spam threshold
+                        threshold = st.slider(
+                            "Adjust spam sensitivity (higher = stricter):",
+                            min_value=50,
+                            max_value=90,
+                            value=spam_results.get('spam_threshold', 70),
+                            step=5
+                        )
+                        
+                        if threshold != spam_results.get('spam_threshold', 70):
+                            # Re-run with new threshold
+                            spam_results = detect_spam_emails(df_clean, threshold)
+                        
+                        # Show spam emails table
+                        if spam_results['spam_emails']:
+                            spam_df = pd.DataFrame(spam_results['spam_emails'])
+                            st.dataframe(
+                                spam_df[['subject', 'from', 'spam_score', 'date']],
+                                use_container_width=True,
+                                column_config={
+                                    "subject": "Subject",
+                                    "from": "Sender",
+                                    "spam_score": st.column_config.NumberColumn(
+                                        "Spam Score",
+                                        help="0-100, higher = more likely spam",
+                                        format="%d"
+                                    ),
+                                    "date": "Date"
+                                }
+                            )
+                            
+                            # Actions for spam emails
+                            st.markdown("**Actions:**")
+                            col_a, col_b = st.columns(2)
+                            
+                            with col_a:
+                                if st.button("Filter Out Spam", type="primary"):
+                                    # Filter out spam emails
+                                    spam_indices = [email['index'] for email in spam_results['spam_emails']]
+                                    df_clean_filtered = df_clean.drop(index=spam_indices)
+                                    st.session_state.df = df_clean_filtered
+                                    st.success(f"Removed {len(spam_indices)} spam emails")
+                                    st.rerun()
+                            
+                            with col_b:
+                                if st.button("Download Spam List", type="secondary"):
+                                    # Create CSV of spam emails
+                                    spam_list = pd.DataFrame(spam_results['spam_emails'])
+                                    csv = spam_list.to_csv(index=False)
+                                    st.download_button(
+                                        label="Download CSV",
+                                        data=csv,
+                                        file_name="spam_emails.csv",
+                                        mime="text/csv"
+                                    )
+                            
+                            # Visualize spam distribution
+                            st.markdown("**Spam Score Distribution:**")
+                            
+                            if 'spam_scores' in spam_results and spam_results['spam_scores']:
+                                # Create histogram
+                                scores_df = pd.DataFrame({'spam_score': spam_results['spam_scores']})
+                                st.bar_chart(scores_df['spam_score'].value_counts().sort_index())
+                                
+                                # Show score statistics
+                                st.markdown("**Score Statistics:**")
+                                col_stats1, col_stats2, col_stats3 = st.columns(3)
+                                with col_stats1:
+                                    st.metric("Avg Score", f"{scores_df['spam_score'].mean():.1f}")
+                                with col_stats2:
+                                    st.metric("Median Score", f"{scores_df['spam_score'].median():.1f}")
+                                with col_stats3:
+                                    st.metric("Max Score", f"{scores_df['spam_score'].max():.1f}")
+                else:
+                    st.success("✅ No spam detected in your email collection!")
+                    
+                    # Show spam prevention tips
+                    with st.expander("Spam Prevention Tips", expanded=False):
+                        st.markdown("""
+                        **To keep your inbox clean:**
+                        
+                        1. **Use filters** - Set up rules to automatically move suspected spam
+                        2. **Don't click unsubscribe** on obvious spam (confirms your email is active)
+                        3. **Use disposable emails** for website signups
+                        4. **Report spam** to your email provider
+                        5. **Avoid posting your email** publicly on forums/social media
+                        
+                        **Common spam indicators:**
+                        - Generic greetings ("Dear friend")
+                        - Urgent language ("Act now!")
+                        - Too good to be true offers
+                        - Poor grammar/spelling
+                        - Suspicious sender addresses
+                        """)
+        # ========== END SPAM DETECTION ==========
         
         # Data preview
         st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Cleaned Data Preview</h3>', unsafe_allow_html=True)
@@ -1871,6 +2081,124 @@ with tab3:
         else:
             df_organized = df.copy()
     
+    # ========== EMAIL SPAM FILTERING OPTIONS ==========
+    if structure == "Email Data":
+        st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">📧 Email Organization Options</h3>', unsafe_allow_html=True)
+        
+        # Check if we need to calculate spam scores
+        if 'Spam_Score' not in df_organized.columns:
+            st.info("Calculating spam scores for your emails...")
+            
+            # Import spam detection function
+            try:
+                from utils.detection import detect_spam_emails
+                
+                # Calculate spam scores
+                spam_results = detect_spam_emails(df_organized)
+                
+                if spam_results and 'spam_scores' in spam_results:
+                    # Add spam scores to DataFrame
+                    df_organized['Spam_Score'] = spam_results['spam_scores']
+                    df_organized['Is_Spam'] = df_organized['Spam_Score'] >= 70
+                    
+                    spam_count = len(df_organized[df_organized['Is_Spam']])
+                    st.success(f"✅ Spam analysis complete: {spam_count} likely spam emails detected")
+                else:
+                    # Fallback: Calculate simple spam score
+                    from utils.detection import calculate_spam_score
+                    df_organized['Spam_Score'] = df_organized.apply(
+                        lambda row: calculate_spam_score(
+                            row.get('Subject', ''),
+                            row.get('From_Domain', ''),
+                            row.get('Body_Preview', ''),
+                            row.get('From', '')
+                        ) if 'Subject' in df_organized.columns else 0,
+                        axis=1
+                    )
+                    df_organized['Is_Spam'] = df_organized['Spam_Score'] >= 70
+                    
+            except Exception as e:
+                st.warning(f"Could not calculate spam scores: {str(e)}")
+                # Add default scores
+                df_organized['Spam_Score'] = 0
+                df_organized['Is_Spam'] = False
+        
+        # Show spam statistics if we have scores
+        if 'Spam_Score' in df_organized.columns:
+            spam_count = len(df_organized[df_organized['Spam_Score'] >= 70])
+            total_emails = len(df_organized)
+            spam_percentage = (spam_count / total_emails * 100) if total_emails > 0 else 0
+            avg_score = df_organized['Spam_Score'].mean()
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Emails", total_emails)
+            with col2:
+                st.metric("Likely Spam", spam_count)
+            with col3:
+                st.metric("Spam %", f"{spam_percentage:.1f}%")
+            with col4:
+                st.metric("Avg Score", f"{avg_score:.1f}")
+            
+            # Email organization controls
+            st.markdown("#### Organization Options")
+            
+            col_org1, col_org2 = st.columns(2)
+            
+            with col_org1:
+                # Sort options
+                sort_option = st.selectbox(
+                    "Sort emails by:",
+                    ["Date (Newest First)", "Date (Oldest First)", "Spam Score (High to Low)", 
+                     "Sender (A-Z)", "Subject (A-Z)", "Priority Score (High to Low)"]
+                )
+                
+                # Apply sorting
+                if sort_option == "Date (Newest First)" and 'Date' in df_organized.columns:
+                    df_organized = df_organized.sort_values('Date', ascending=False)
+                elif sort_option == "Date (Oldest First)" and 'Date' in df_organized.columns:
+                    df_organized = df_organized.sort_values('Date', ascending=True)
+                elif sort_option == "Spam Score (High to Low)" and 'Spam_Score' in df_organized.columns:
+                    df_organized = df_organized.sort_values('Spam_Score', ascending=False)
+                elif sort_option == "Sender (A-Z)" and 'From' in df_organized.columns:
+                    df_organized = df_organized.sort_values('From', ascending=True)
+                elif sort_option == "Subject (A-Z)" and 'Subject' in df_organized.columns:
+                    df_organized = df_organized.sort_values('Subject', ascending=True)
+                elif sort_option == "Priority Score (High to Low)" and 'Priority_Score' in df_organized.columns:
+                    df_organized = df_organized.sort_values('Priority_Score', ascending=False)
+            
+            with col_org2:
+                # Filter options
+                filter_option = st.selectbox(
+                    "Filter emails:",
+                    ["Show All", "Show Only Spam", "Exclude Spam", "Show High Priority", "Show Recent (Last 30 days)"]
+                )
+                
+                # Apply filtering
+                if filter_option == "Show Only Spam" and 'Is_Spam' in df_organized.columns:
+                    before_count = len(df_organized)
+                    df_organized = df_organized[df_organized['Is_Spam']]
+                    after_count = len(df_organized)
+                    st.info(f"Showing {after_count} spam emails")
+                elif filter_option == "Exclude Spam" and 'Is_Spam' in df_organized.columns:
+                    before_count = len(df_organized)
+                    df_organized = df_organized[~df_organized['Is_Spam']]
+                    after_count = len(df_organized)
+                    st.success(f"Excluded {before_count - after_count} spam emails")
+                elif filter_option == "Show High Priority" and 'Priority_Score' in df_organized.columns:
+                    df_organized = df_organized[df_organized['Priority_Score'] >= 70]
+                    st.info(f"Showing {len(df_organized)} high priority emails")
+                elif filter_option == "Show Recent (Last 30 days)" and 'Date' in df_organized.columns:
+                    try:
+                        cutoff_date = pd.Timestamp.now() - pd.Timedelta(days=30)
+                        df_organized = df_organized[df_organized['Date'] >= cutoff_date]
+                        st.info(f"Showing {len(df_organized)} emails from last 30 days")
+                    except:
+                        pass
+            
+            st.markdown("---")
+    # ========== END EMAIL SPAM FILTERING ==========
+    
     st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Select Columns to Keep</h3>', unsafe_allow_html=True)
     cols_to_keep = st.multiselect(
         "Columns:",
@@ -1882,8 +2210,40 @@ with tab3:
     if cols_to_keep:
         df_organized = df_organized[cols_to_keep]
     
-    st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Organized Data</h3>', unsafe_allow_html=True)
-    st.dataframe(df_organized, use_container_width=True, height=400)
+    st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Organized Data Preview</h3>', unsafe_allow_html=True)
+    
+    # Show data preview with spam highlights if applicable
+    if structure == "Email Data" and 'Spam_Score' in df_organized.columns:
+        # Create a styled dataframe that highlights spam
+        display_df = df_organized.copy()
+        
+        # Add color coding for spam
+        def highlight_spam(row):
+            if row['Spam_Score'] >= 70:
+                return ['background-color: #ffcccc'] * len(row)
+            elif row['Spam_Score'] >= 50:
+                return ['background-color: #fff3cd'] * len(row)
+            else:
+                return [''] * len(row)
+        
+        # Show styled dataframe
+        st.dataframe(
+            display_df.style.apply(highlight_spam, axis=1),
+            use_container_width=True,
+            height=400
+        )
+        
+        # Legend for spam highlighting
+        col_legend1, col_legend2, col_legend3 = st.columns(3)
+        with col_legend1:
+            st.markdown('<div style="background-color: #ffcccc; padding: 5px; border-radius: 3px;">Likely spam (≥70)</div>', unsafe_allow_html=True)
+        with col_legend2:
+            st.markdown('<div style="background-color: #fff3cd; padding: 5px; border-radius: 3px;">Suspicious (50-69)</div>', unsafe_allow_html=True)
+        with col_legend3:
+            st.markdown('<div style="background-color: #d4edda; padding: 5px; border-radius: 3px;">Clean (<50)</div>', unsafe_allow_html=True)
+    else:
+        # Regular dataframe display for non-email data
+        st.dataframe(df_organized, use_container_width=True, height=400)
     
     with st.expander("Summary Statistics"):
         if len(df_organized.select_dtypes(include=['number']).columns) > 0:
@@ -1891,9 +2251,33 @@ with tab3:
         else:
             st.info("No numeric columns for statistics")
     
+    # Store the organized data
     st.session_state.df_organized = df_organized
-
-# No else: block here - it should just end the with tab3: block
+    
+    # Action buttons
+    st.markdown("---")
+    col_action1, col_action2, col_action3 = st.columns(3)
+    
+    with col_action1:
+        if st.button("Apply Organization", type="primary", use_container_width=True):
+            st.success("Data organization applied!")
+            st.rerun()
+    
+    with col_action2:
+        if st.button("Reset Filters", type="secondary", use_container_width=True):
+            # Reset to original organized data
+            if structure == "Email Data":
+                # Re-organize without filters
+                from utils.organization import organize_email_data
+                df_organized = organize_email_data(df)
+                st.session_state.df_organized = df_organized
+            st.info("Filters reset to original organization")
+            st.rerun()
+    
+    with col_action3:
+        if st.button("Go to Export", type="secondary", use_container_width=True):
+            st.info("Proceeding to Export tab...")
+            st.markdown("Please click on the **Export** tab above to save your organized data")
 
 # TAB 4: EXPORT
 with tab4:
@@ -1987,6 +2371,106 @@ with tab4:
                     st.error("Excel export failed")
                     st.info("Please use the CSV export instead")
         
+        # ========== ADD SPAM STATISTICS HERE (for email data) ==========
+        # Get structure from session state
+        if 'data_structure' in st.session_state and st.session_state.data_structure:
+            try:
+                structure, _, _ = st.session_state.data_structure
+                
+                if structure == "Email Data" and 'Spam_Score' in df_export.columns:
+                    st.markdown("---")
+                    st.markdown("### 📧 Email Spam Statistics")
+                    
+                    # Calculate spam statistics
+                    spam_count = len(df_export[df_export['Spam_Score'] >= 70])
+                    total_emails = len(df_export)
+                    spam_percentage = (spam_count / total_emails * 100) if total_emails > 0 else 0
+                    avg_score = df_export['Spam_Score'].mean()
+                    highest_score = df_export['Spam_Score'].max()
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Total Emails", total_emails)
+                    with col2:
+                        st.metric("Likely Spam", spam_count, 
+                                 delta=f"{spam_percentage:.1f}%", 
+                                 delta_color="inverse" if spam_percentage > 20 else "off")
+                    with col3:
+                        st.metric("Avg Spam Score", f"{avg_score:.1f}")
+                    with col4:
+                        st.metric("Highest Score", f"{highest_score:.1f}")
+                    
+                    # Additional spam insights
+                    with st.expander("Detailed Spam Analysis", expanded=False):
+                        # Distribution by spam score ranges
+                        st.markdown("**Spam Score Distribution:**")
+                        
+                        # Create score ranges
+                        score_ranges = {
+                            "Clean (0-29)": (0, 29),
+                            "Low Risk (30-49)": (30, 49),
+                            "Suspicious (50-69)": (50, 69),
+                            "Likely Spam (70-89)": (70, 89),
+                            "High Risk (90-100)": (90, 100)
+                        }
+                        
+                        distribution_data = []
+                        for label, (low, high) in score_ranges.items():
+                            count = len(df_export[(df_export['Spam_Score'] >= low) & (df_export['Spam_Score'] <= high)])
+                            percentage = (count / total_emails * 100) if total_emails > 0 else 0
+                            distribution_data.append({
+                                "Score Range": label,
+                                "Emails": count,
+                                "Percentage": f"{percentage:.1f}%"
+                            })
+                        
+                        distribution_df = pd.DataFrame(distribution_data)
+                        st.dataframe(distribution_df, use_container_width=True)
+                        
+                        # Top spam senders
+                        if 'From' in df_export.columns and spam_count > 0:
+                            st.markdown("**Top Spam Senders:**")
+                            spam_senders = df_export[df_export['Spam_Score'] >= 70]['From'].value_counts().head(10)
+                            
+                            if len(spam_senders) > 0:
+                                sender_df = spam_senders.reset_index()
+                                sender_df.columns = ['Sender', 'Spam Emails']
+                                st.dataframe(sender_df, use_container_width=True)
+                        
+                        # Export spam-only data
+                        if spam_count > 0:
+                            st.markdown("**Export Spam Data:**")
+                            col_a, col_b = st.columns(2)
+                            
+                            with col_a:
+                                # Export spam emails as CSV
+                                spam_df = df_export[df_export['Spam_Score'] >= 70]
+                                spam_csv = spam_df.to_csv(index=False)
+                                st.download_button(
+                                    label="Download Spam Emails (CSV)",
+                                    data=spam_csv,
+                                    file_name="spam_emails.csv",
+                                    mime="text/csv",
+                                    type="secondary",
+                                    use_container_width=True
+                                )
+                            
+                            with col_b:
+                                # Export clean emails
+                                clean_df = df_export[df_export['Spam_Score'] < 70]
+                                clean_csv = clean_df.to_csv(index=False)
+                                st.download_button(
+                                    label="Download Clean Emails (CSV)",
+                                    data=clean_csv,
+                                    file_name="clean_emails.csv",
+                                    mime="text/csv",
+                                    type="secondary",
+                                    use_container_width=True
+                                )
+            except:
+                pass  # Silently skip if structure can't be determined
+        # ========== END SPAM STATISTICS ==========
+        
         with st.expander("Final Preview"):
             st.dataframe(df_export, use_container_width=True)
         
@@ -1998,7 +2482,7 @@ with tab4:
         col_reset1, col_reset2, col_reset3 = st.columns(3)
         
         with col_reset1:
-            if st.button("Save & Start New", type="primary", use_container_width=True):
+            if st.button("📥 Save & Start New", type="primary", use_container_width=True):
                 # Increment conversion count since user completed this conversion
                 increment_conversion_count(st.session_state.user_email)
                 
@@ -2015,14 +2499,14 @@ with tab4:
                 st.rerun()
         
         with col_reset2:
-            if st.button("Reset Current", type="secondary", use_container_width=True):
+            if st.button("🔄 Reset Current", type="secondary", use_container_width=True):
                 # Reset current data without counting as new conversion
                 st.session_state.df_organized = None
                 st.info("Data reset. You can reorganize without starting over.")
                 st.rerun()
         
         with col_reset3:
-            if st.button("Return to Start", type="secondary", use_container_width=True):
+            if st.button("🏠 Return to Start", type="secondary", use_container_width=True):
                 # Go back to Tab 1 without resetting
                 st.info("Returning to Input tab...")
                 # Note: In Streamlit, we can't directly switch tabs programmatically
@@ -2039,9 +2523,6 @@ with tab4:
         
     else:
         st.info("Please organize your data in the Organize tab first")
-
-# Add to your tab definitions at the top of main content
-#tab1, tab2, tab3, tab4, tab5 = st.tabs(["Input", "Detect", "Organize", "Export", "Impute"])
 
 # TAB 5: IMPUTE
 with tab5:

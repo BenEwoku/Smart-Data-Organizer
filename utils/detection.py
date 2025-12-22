@@ -365,3 +365,218 @@ def detect_email_threads(df):
         
     except:
         return {"has_threads": False, "thread_count": 0}
+
+
+# Add to utils/detection.py
+
+def detect_spam_emails(df, spam_threshold=70):
+    """
+    Detect spam emails based on various heuristics
+    
+    Args:
+        df: DataFrame with email data
+        spam_threshold: Score above which email is considered spam (0-100)
+        
+    Returns:
+        dict: Spam analysis results with spam_count, ham_count, spam_emails
+    """
+    try:
+        if df.empty or 'Subject' not in df.columns or 'From' not in df.columns:
+            return {
+                'spam_count': 0,
+                'ham_count': len(df) if not df.empty else 0,
+                'spam_emails': [],
+                'spam_percentage': 0,
+                'spam_scores': []
+            }
+        
+        spam_scores = []
+        spam_indices = []
+        
+        for idx, row in df.iterrows():
+            score = 0
+            
+            # Subject-based spam indicators
+            if 'Subject' in df.columns and pd.notna(row.get('Subject')):
+                subject = str(row['Subject']).lower()
+                
+                # Spam keywords in subject
+                spam_subject_keywords = [
+                    'urgent', 'asap', '!!!', '$$$', 'free', 'winner', 'prize',
+                    'congratulations', 'lottery', 'million', 'billion',
+                    'click here', 'limited time', 'special offer',
+                    'risk-free', 'guaranteed', 'act now', 'last chance',
+                    'no cost', 'no obligation', 'credit', 'loan', 'debt',
+                    'viagra', 'cialis', 'pharmacy', 'medication',
+                    'investment', 'opportunity', 'work from home',
+                    'make money', 'earn cash', 'income', 'profit'
+                ]
+                
+                for keyword in spam_subject_keywords:
+                    if keyword in subject:
+                        score += 5
+            
+            # Sender-based spam indicators
+            if 'From' in df.columns and pd.notna(row.get('From')):
+                sender = str(row['From']).lower()
+                
+                # Generic/suspicious sender patterns
+                suspicious_patterns = [
+                    'noreply@', 'no-reply@', 'newsletter@',
+                    'notification@', 'alert@', 'update@',
+                    'info@', 'service@', 'support@',
+                    'mailer@', 'bulk@', 'promo@'
+                ]
+                
+                for pattern in suspicious_patterns:
+                    if pattern in sender:
+                        score += 3
+                
+                # Check for suspicious domains
+                suspicious_domains = [
+                    'gmail.com', 'yahoo.com', 'hotmail.com',  # Free email services
+                    'outlook.com', 'aol.com', 'mail.com',
+                    'promotion.', 'offer.', 'discount.',
+                    'newsletter.', 'marketing.', 'advertising.'
+                ]
+                
+                sender_domain = sender.split('@')[-1] if '@' in sender else ''
+                for domain in suspicious_domains:
+                    if domain in sender_domain:
+                        score += 2
+            
+            # Body-based spam indicators (if available)
+            if 'Body_Preview' in df.columns and pd.notna(row.get('Body_Preview')):
+                body = str(row['Body_Preview']).lower()
+                
+                # Spam phrases in body
+                spam_body_phrases = [
+                    'unsubscribe', 'opt-out', 'click to remove',
+                    'money back guarantee', 'risk free',
+                    'call now', 'order now', 'buy now',
+                    'limited supply', 'while supplies last',
+                    'this isn\'t spam', 'not spam',
+                    'legal disclaimer', 'privacy policy'
+                ]
+                
+                for phrase in spam_body_phrases:
+                    if phrase in body:
+                        score += 2
+            
+            # Additional spam indicators
+            # 1. Very short subject
+            if 'Subject' in df.columns and pd.notna(row.get('Subject')):
+                if len(str(row['Subject'])) < 5:
+                    score += 3
+            
+            # 2. All caps subject
+            if 'Subject' in df.columns and pd.notna(row.get('Subject')):
+                subject = str(row['Subject'])
+                if subject.isupper():
+                    score += 4
+            
+            # 3. Excessive punctuation
+            if 'Subject' in df.columns and pd.notna(row.get('Subject')):
+                subject = str(row['Subject'])
+                if subject.count('!') > 2 or subject.count('?') > 3:
+                    score += 2
+            
+            # 4. Generic greetings (if we have body)
+            if 'Body_Preview' in df.columns and pd.notna(row.get('Body_Preview')):
+                body_start = str(row['Body_Preview'])[:100].lower()
+                generic_greetings = ['dear friend', 'dear sir', 'dear madam', 'hello', 'hi there']
+                for greeting in generic_greetings:
+                    if greeting in body_start:
+                        score += 2
+            
+            # Normalize score to 0-100
+            score = min(score, 100)
+            spam_scores.append(score)
+            
+            if score >= spam_threshold:
+                spam_indices.append(idx)
+        
+        # Calculate statistics
+        spam_count = len(spam_indices)
+        ham_count = len(df) - spam_count
+        spam_percentage = (spam_count / len(df)) * 100 if len(df) > 0 else 0
+        
+        # Get spam emails details
+        spam_emails = []
+        if spam_indices:
+            for idx in spam_indices[:10]:  # Limit to first 10 for performance
+                email_info = {
+                    'index': idx,
+                    'subject': df.loc[idx, 'Subject'] if 'Subject' in df.columns else 'No Subject',
+                    'from': df.loc[idx, 'From'] if 'From' in df.columns else 'Unknown',
+                    'spam_score': spam_scores[idx],
+                    'date': df.loc[idx, 'Date'] if 'Date' in df.columns else None
+                }
+                spam_emails.append(email_info)
+        
+        return {
+            'spam_count': spam_count,
+            'ham_count': ham_count,
+            'spam_percentage': spam_percentage,
+            'spam_emails': spam_emails,
+            'spam_scores': spam_scores,
+            'spam_threshold': spam_threshold
+        }
+        
+    except Exception as e:
+        print(f"Spam detection error: {str(e)}")
+        return {
+            'spam_count': 0,
+            'ham_count': len(df) if not df.empty else 0,
+            'spam_emails': [],
+            'spam_percentage': 0,
+            'spam_scores': [],
+            'error': str(e)
+        }
+
+# Add this to utils/detection.py or utils/email_utils.py
+
+def add_spam_columns_to_dataframe(df, spam_threshold=70):
+    """
+    Ensure Spam_Score and Is_Spam columns exist in DataFrame
+    
+    Args:
+        df: pandas DataFrame with email data
+        spam_threshold: Threshold for spam detection (default 70)
+        
+    Returns:
+        DataFrame with Spam_Score and Is_Spam columns added/updated
+    """
+    try:
+        df_copy = df.copy()
+        
+        # Check if we need to calculate spam scores
+        if 'Spam_Score' not in df_copy.columns:
+            # Calculate spam scores
+            from utils.detection import detect_spam_emails
+            spam_results = detect_spam_emails(df_copy, spam_threshold)
+            
+            if spam_results and 'spam_scores' in spam_results:
+                df_copy['Spam_Score'] = spam_results['spam_scores']
+            else:
+                # Fallback calculation
+                df_copy['Spam_Score'] = df_copy.apply(
+                    lambda row: calculate_spam_score_for_row(row),
+                    axis=1
+                )
+        
+        # Ensure Is_Spam column exists
+        if 'Is_Spam' not in df_copy.columns:
+            df_copy['Is_Spam'] = df_copy['Spam_Score'] >= spam_threshold
+        else:
+            # Update based on current threshold
+            df_copy['Is_Spam'] = df_copy['Spam_Score'] >= spam_threshold
+        
+        return df_copy
+        
+    except Exception as e:
+        print(f"Error adding spam columns: {str(e)}")
+        # Add default columns
+        df_copy['Spam_Score'] = 0
+        df_copy['Is_Spam'] = False
+        return df_copy

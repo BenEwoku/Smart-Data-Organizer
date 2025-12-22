@@ -7,6 +7,7 @@ import re
 import time
 from typing import Dict, Any, Optional
 import pandas as pd
+import langdetect
 
 class FreeAIEngine:
     """Free AI engine using Hugging Face with local fallback"""
@@ -26,11 +27,13 @@ class FreeAIEngine:
             self.hf_token = None
         
         # Fallback models (free tier - prioritize smaller models)
+
         self.models = [
-            "Helsinki-NLP/opus-mt-zh-en",  # Free, no token needed, Chinese → English
-            "google/flan-t5-small",       # Good for extraction/summarization
-            "t5-small",                   # Very lightweight alternative
-            "sshleifer/distilbart-cnn-12-6"  # Fast summarization
+            "Helsinki-NLP/opus-mt-zh-en",  # Best for Chinese→English
+            "facebook/mbart-large-50-many-to-many-mmt",  # Good for multilingual
+            "google/flan-t5-small",
+            "t5-small",
+            "sshleifer/distilbart-cnn-12-6"
         ]
         
         self.current_model = 0
@@ -121,10 +124,13 @@ class FreeAIEngine:
             return {"success": False, "error": str(e)}
     
     def _generate_prompt(self, text: str, task: str) -> str:
-        """Generate task-specific prompts"""
-        
-        prompts = {
-            "extract": f"""Extract structured data from this text and output ONLY valid JSON.
+    """Generate task-specific prompts with language detection"""
+    
+    # Detect language first
+    detected_lang = self._detect_language(text)
+    
+    prompts = {
+        "extract": f"""Extract structured data from this text and output ONLY valid JSON.
 
 Text:
 {text}
@@ -133,28 +139,28 @@ Output JSON format:
 {{"headers": ["column1", "column2"], "rows": [["value1", "value2"]]}}
 
 JSON:""",
-            
-            "summarize": f"""Summarize this text in 3 concise bullet points:
+        
+        "summarize": f"""Summarize this text in 3 concise bullet points:
 
 {text}
 
 Summary:""",
-            
-            "translate": f"""Translate this Chinese text to English. Do not add any extra text or explanations.
+        
+        "translate": f"""Translate this {detected_lang} text to English. Do not add any extra text or explanations.
 
 Text:
 {text}
 
 Translation in English:""",
-            
-            "insights": f"""Analyze this data and provide 3 key insights:
+        
+        "insights": f"""Analyze this data and provide 3 key insights:
 
 {text}
 
 Insights:"""
-        }
-        
-        return prompts.get(task, prompts["extract"])
+    }
+    
+    return prompts.get(task, prompts["extract"])
     
     def _process_response(self, content: str, task: str) -> Dict:
         """Process AI response"""
@@ -293,3 +299,86 @@ Insights:"""
             pass
         
         return None
+
+    def _detect_language(self, text: str) -> str:
+        """Detect the language of the text"""
+        try:
+            if len(text.strip()) < 50:  # Too short to detect reliably
+                return "unknown"
+            lang_code = langdetect.detect(text[:500])  # Limit to first 500 chars for speed
+            lang_names = {
+                'zh': 'Chinese',
+                'en': 'English',
+                'es': 'Spanish',
+                'fr': 'French',
+                'de': 'German',
+                'it': 'Italian',
+                'pt': 'Portuguese',
+                'ru': 'Russian',
+                'ja': 'Japanese',
+                'ko': 'Korean',
+                'ar': 'Arabic',
+                'hi': 'Hindi',
+                'tr': 'Turkish',
+                'nl': 'Dutch',
+                'pl': 'Polish',
+                'sv': 'Swedish',
+                'da': 'Danish',
+                'fi': 'Finnish',
+                'no': 'Norwegian',
+                'cs': 'Czech',
+                'hu': 'Hungarian',
+                'el': 'Greek',
+                'ro': 'Romanian',
+                'uk': 'Ukrainian',
+                'vi': 'Vietnamese',
+                'th': 'Thai',
+                'id': 'Indonesian',
+                'ms': 'Malay',
+                'fil': 'Filipino',
+                'he': 'Hebrew',
+                'ur': 'Urdu',
+                'bn': 'Bengali',
+                'ta': 'Tamil',
+                'te': 'Telugu',
+                'mr': 'Marathi',
+                'gu': 'Gujarati',
+                'kn': 'Kannada',
+                'ml': 'Malayalam',
+                'or': 'Odia',
+                'pa': 'Punjabi',
+                'si': 'Sinhala',
+                'my': 'Burmese',
+                'km': 'Khmer',
+                'lo': 'Lao',
+                'ne': 'Nepali',
+                'am': 'Amharic',
+                'sw': 'Swahili',
+                'af': 'Afrikaans',
+                'sq': 'Albanian',
+                'hy': 'Armenian',
+                'az': 'Azerbaijani',
+                'be': 'Belarusian',
+                'bg': 'Bulgarian',
+                'et': 'Estonian',
+                'gl': 'Galician',
+                'ka': 'Georgian',
+                'hr': 'Croatian',
+                'lt': 'Lithuanian',
+                'lv': 'Latvian',
+                'mk': 'Macedonian',
+                'mt': 'Maltese',
+                'sr': 'Serbian',
+                'sk': 'Slovak',
+                'sl': 'Slovenian',
+                'tl': 'Tagalog',
+                'uk': 'Ukrainian',
+                'uz': 'Uzbek',
+                'vi': 'Vietnamese',
+                'cy': 'Welsh',
+                'yi': 'Yiddish',
+                'zu': 'Zulu'
+            }
+            return lang_names.get(lang_code, lang_code.upper())
+        except:
+            return "unknown"

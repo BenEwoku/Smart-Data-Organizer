@@ -26,6 +26,8 @@ from email.header import decode_header
 import re
 from datetime import datetime
 from io import BytesIO  # <-- ADD THIS LINE
+# In your imports section (near the top)
+from utils.ai_orchestrator import LocalAIOrchestrator
 
 
 
@@ -877,7 +879,10 @@ def get_method_description(method):
     return descriptions.get(method, 'Custom method')
 
 # Main content area
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Input", "Detect", "Organize", "Export", "Impute"])
+# Update your tabs to include AI tab
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    ["Input", "Detect", "Organize", "Export", "Impute", "🧠 AI Organizer"]
+)
 
 # TAB 1: INPUT
 with tab1:
@@ -2903,6 +2908,13 @@ with tab5:
                             st.rerun()
                         else:
                             st.info("No columns contained missing values")
+
+# TAB 6: AI ORGANIZER
+# In the AI Organizer tab section
+with tab6:
+    # Import and run the AI organizer
+    from app_ai_organizer import show_ai_organizer_tab
+    show_ai_organizer_tab()
 
 # Footer
 st.markdown("---")

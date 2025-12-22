@@ -1,8 +1,9 @@
 """
-🤖 AI Organizer Tab - Complete Tab 6 Implementation
+AI Organizer Tab - Complete Tab 6 Implementation
 """
 import streamlit as st
 import pandas as pd
+from typing import Dict, List, Any
 from utils.ai_orchestrator import AIOrchestrator
 from io import BytesIO
 
@@ -19,7 +20,7 @@ def show_ai_organizer_tab():
         color: white;
         text-align: center;
     ">
-        <h1 style="color: white; margin: 0; font-size: 2.8rem;">🤖 AI Data Organizer</h1>
+        <h1 style="color: white; margin: 0; font-size: 2.8rem;">AI Data Organizer</h1>
         <p style="color: rgba(255, 255, 255, 0.95); font-size: 1.2rem; margin: 0.8rem 0 0 0;">
         Transform ANY text into organized data • 100% Free • No API Keys Required
         </p>
@@ -41,7 +42,7 @@ def show_ai_organizer_tab():
             text-align: center;
             border-top: 4px solid #667eea;
         ">
-            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📊</div>
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
             <h4 style="margin: 0;">Data Extraction</h4>
             <p style="color: #666; font-size: 0.9rem; margin: 0.5rem 0 0 0;">
             Extract tables from any text
@@ -59,7 +60,7 @@ def show_ai_organizer_tab():
             text-align: center;
             border-top: 4px solid #764ba2;
         ">
-            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📝</div>
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div>
             <h4 style="margin: 0;">Summarization</h4>
             <p style="color: #666; font-size: 0.9rem; margin: 0.5rem 0 0 0;">
             Generate concise summaries
@@ -77,7 +78,7 @@ def show_ai_organizer_tab():
             text-align: center;
             border-top: 4px solid #4CAF50;
         ">
-            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🌍</div>
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌍</div>
             <h4 style="margin: 0;">Translation</h4>
             <p style="color: #666; font-size: 0.9rem; margin: 0.5rem 0 0 0;">
             Translate text to English
@@ -95,7 +96,7 @@ def show_ai_organizer_tab():
             text-align: center;
             border-top: 4px solid #FF9800;
         ">
-            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🔍</div>
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>
             <h4 style="margin: 0;">Insights</h4>
             <p style="color: #666; font-size: 0.9rem; margin: 0.5rem 0 0 0;">
             Generate data insights
@@ -108,7 +109,7 @@ def show_ai_organizer_tab():
         st.session_state.ai_orchestrator = AIOrchestrator()
     
     # ==================== INPUT SECTION ====================
-    st.markdown("### `Input Your Data")
+    st.markdown("### Input Your Data")
     
     input_method = st.radio(
         "Choose input method:",
@@ -293,11 +294,10 @@ PROD-005 | USB-C Hub | Accessories | $29.99 | 200"""
             st.dataframe(df, width='stretch', height=350)
             
             # Feature Results
-            st.markdown("### ✨ AI Analysis Results")
+            st.markdown("### AI Analysis Results")
             
             for feature_name, feature_result in results["features"].items():
-                icon = get_feature_icon(feature_name)
-                with st.expander(f"{icon} {feature_name.title()}", expanded=True):
+                with st.expander(f"{feature_name.title()}", expanded=True):
                     if feature_result.get("success"):
                         st.success("Success")
                         
@@ -401,17 +401,6 @@ def extract_text_from_file(uploaded_file):
     else:
         return uploaded_file.getvalue().decode('utf-8')
 
-def get_feature_icon(feature_name: str) -> str:
-    """Get icon for feature"""
-    icons = {
-        "extract": "📊",
-        "summarize": "📝",
-        "translate": "🌍",
-        "clean": "🧹",
-        "insights": "🔍"
-    }
-    return icons.get(feature_name, "✨")
-
 def generate_ai_report(results: Dict) -> str:
     """Generate markdown report from AI results"""
     report = f"""# AI Data Analysis Report
@@ -422,7 +411,7 @@ Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}
 - Features processed: {len(results.get('features', {}))}
 - Successful features: {sum(1 for r in results.get('features', {}).values() if r.get('success'))}
 
-## 🔧 Features Executed
+## Features Executed
 """
     
     for feature_name, feature_result in results.get("features", {}).items():

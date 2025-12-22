@@ -1957,10 +1957,29 @@ with tab4:
                     
                     if test_data:
                         # Basic export works, now try with real data
-                        excel_data = export_to_excel(df_export)
+                        
+                        # FIX: Prepare the data by removing timezone from datetime columns
+                        df_for_export = df_export.copy()
+                        
+                        # Check for datetime columns with timezone
+                        for col in df_for_export.columns:
+                            if pd.api.types.is_datetime64_any_dtype(df_for_export[col]):
+                                try:
+                                    # Check if it has timezone info
+                                    if hasattr(df_for_export[col].dt, 'tz') and df_for_export[col].dt.tz is not None:
+                                        # Remove timezone for Excel compatibility
+                                        df_for_export[col] = df_for_export[col].dt.tz_localize(None)
+                                        excel_error.info(f"Removed timezone from column: {col}")
+                                except Exception as tz_error:
+                                    # If we can't remove timezone, convert to string
+                                    excel_error.warning(f"Converting datetime column '{col}' to string due to timezone issue")
+                                    df_for_export[col] = df_for_export[col].astype(str)
+                        
+                        # Now export the prepared data
+                        excel_data = export_to_excel(df_for_export)
                         
                         if excel_data is None:
-                            # Fallback: create Excel manually
+                            # Fallback: create Excel manually with string conversion
                             excel_error.warning("Using fallback Excel generation...")
                             buffer = BytesIO()
                             
@@ -1981,6 +2000,11 @@ with tab4:
                             type="primary",
                             use_container_width=True
                         )
+                        
+                        # Show file size info
+                        if excel_data:
+                            file_size_mb = len(excel_data) / (1024 * 1024)
+                            st.caption(f"File size: {file_size_mb:.2f} MB")
                     else:
                         excel_error.error("Excel export not available. Please install: pip install openpyxl")
                         

@@ -40,6 +40,7 @@ def export_to_excel(df, sheet_name='Data', index=False):
     """
     try:
         # DEBUG: Log what we're receiving
+        import streamlit as st
         st.write(f"DEBUG: export_to_excel called with df type: {type(df)}")
         
         if df is None:
@@ -57,16 +58,43 @@ def export_to_excel(df, sheet_name='Data', index=False):
         
         st.write(f"DEBUG: DataFrame shape: {df.shape}")
         
-        # First, ensure all columns are safe for Excel
+        # Make a copy to avoid modifying original
         df_safe = df.copy()
+        
+        # Fix datetime columns with timezone
+        datetime_fixed = False
+        for col in df_safe.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_safe[col]):
+                try:
+                    # Check if datetime has timezone
+                    sample = df_safe[col].dropna().iloc[0] if not df_safe[col].dropna().empty else None
+                    if sample is not None and hasattr(sample, 'tz') and sample.tz is not None:
+                        # Remove timezone for Excel compatibility
+                        df_safe[col] = df_safe[col].dt.tz_localize(None)
+                        datetime_fixed = True
+                        st.info(f"Fixed timezone in column: {col}")
+                except Exception as col_e:
+                    # If can't fix, convert to string
+                    st.warning(f"Converting datetime column '{col}' to string")
+                    df_safe[col] = df_safe[col].astype(str)
         
         # Convert any problematic columns to string
         for col in df_safe.columns:
             try:
                 # Check if column has problematic data types
                 if df_safe[col].dtype == 'object':
-                    # Convert to string, handling NaN
-                    df_safe[col] = df_safe[col].astype(str)
+                    # Check if it contains datetime strings with timezone
+                    try:
+                        # Try to parse as datetime to check for timezone
+                        sample = df_safe[col].dropna().iloc[0] if not df_safe[col].dropna().empty else None
+                        if sample and isinstance(sample, str) and ('+' in sample or '-' in sample[-6:]):
+                            # Likely has timezone, convert to naive datetime
+                            parsed = pd.to_datetime(df_safe[col], errors='coerce', utc=True)
+                            if not parsed.isna().all():
+                                df_safe[col] = parsed.dt.tz_convert(None)
+                                datetime_fixed = True
+                    except:
+                        pass
                 elif df_safe[col].dtype.name == 'category':
                     # Convert categorical to string
                     df_safe[col] = df_safe[col].astype(str)
@@ -77,21 +105,19 @@ def export_to_excel(df, sheet_name='Data', index=False):
         
         buffer = BytesIO()
         
-        # Use a simpler approach without advanced formatting
+        # Try export with error handling
         try:
-            # First try with openpyxl
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                 df_safe.to_excel(writer, sheet_name=sheet_name, index=index)
         except Exception as e1:
-            st.warning(f"openpyxl failed: {str(e1)}")
-            # Try xlsxwriter as fallback
+            st.warning(f"Excel export with formatting failed: {str(e1)}")
+            # Try without writer context
             buffer.seek(0)  # Reset buffer
             try:
-                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                    df_safe.to_excel(writer, sheet_name=sheet_name, index=index)
+                df_safe.to_excel(buffer, sheet_name=sheet_name, index=index, engine='openpyxl')
             except Exception as e2:
-                st.error(f"xlsxwriter also failed: {str(e2)}")
-                # Last resort: create simple CSV in Excel format
+                st.error(f"Simple Excel export also failed: {str(e2)}")
+                # Last resort: create simple CSV
                 buffer.seek(0)
                 df_safe.to_csv(buffer, index=index)
         
@@ -102,10 +128,15 @@ def export_to_excel(df, sheet_name='Data', index=False):
             st.error("Generated empty Excel data")
             return None
             
-        st.success(f"Excel export successful: {len(excel_data)} bytes")
+        if datetime_fixed:
+            st.success(f"Excel export successful (timezone fixed): {len(excel_data)} bytes")
+        else:
+            st.success(f"Excel export successful: {len(excel_data)} bytes")
+            
         return excel_data
         
     except Exception as e:
+        import streamlit as st
         st.error(f"Excel export error: {str(e)}")
         import traceback
         st.error(f"Traceback: {traceback.format_exc()}")

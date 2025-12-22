@@ -821,7 +821,7 @@ def show_system_settings():
                         st.write(f"• {trial_days}-day free trial")
 
 def show_development_tools():
-    """Development and testing tools - SINGLE CORRECT VERSION"""
+    """Development and testing tools - FIXED VERSION"""
     
     st.subheader("Development Tools")
     
@@ -879,7 +879,7 @@ def show_development_tools():
             st.success("App state reset!")
             st.rerun()
     
-    # Cache Management (SIMPLIFIED VERSION - NO ERRORS)
+    # Cache Management (FIXED VERSION)
     st.markdown("---")
     st.markdown("### Cache Management")
     
@@ -896,7 +896,32 @@ def show_development_tools():
             st.rerun()
     
     with cache_col2:
-        st.info("User-specific cache clearing temporarily disabled")
+        # User-specific cache clearing - FIXED
+        from utils.auth import get_all_users
+        
+        try:
+            users = get_all_users()
+            if users and len(users) > 0:
+                user_emails = [u['email'] for u in users]
+                selected_email = st.selectbox(
+                    "Clear cache for user:",
+                    user_emails,
+                    key="cache_user_select"
+                )
+                
+                if st.button("Clear User Cache", use_container_width=True):
+                    from utils.auth import clear_user_cache
+                    success = clear_user_cache(selected_email)
+                    if success:
+                        st.success(f"Cache cleared for {selected_email}")
+                        st.rerun()
+                    else:
+                        st.error("Failed to clear cache")
+            else:
+                st.info("No users found")
+        except Exception as e:
+            st.error(f"Cache management error: {str(e)}")
+            st.caption("Try clearing all caches instead")
     
     # Database operations
     st.markdown("---")

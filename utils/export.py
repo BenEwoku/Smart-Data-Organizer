@@ -5,6 +5,7 @@ Export utilities for various file formats
 
 import pandas as pd
 from io import BytesIO
+import streamlit as st
 
 def export_to_csv(df, index=False, encoding='utf-8'):
     """
@@ -38,34 +39,93 @@ def export_to_excel(df, sheet_name='Data', index=False):
         bytes: Excel data as bytes
     """
     try:
+        # DEBUG: Log what we're receiving
+        st.write(f"DEBUG: export_to_excel called with df type: {type(df)}")
+        
+        if df is None:
+            st.error("Excel export: df is None")
+            return None
+            
+        if df.empty:
+            st.warning("Excel export: df is empty, creating empty workbook")
+            # Create empty Excel file
+            from openpyxl import Workbook
+            buffer = BytesIO()
+            wb = Workbook()
+            wb.save(buffer)
+            return buffer.getvalue()
+        
+        st.write(f"DEBUG: DataFrame shape: {df.shape}")
+        
+        # First, ensure all columns are safe for Excel
+        df_safe = df.copy()
+        
+        # Convert any problematic columns to string
+        for col in df_safe.columns:
+            try:
+                # Check if column has problematic data types
+                if df_safe[col].dtype == 'object':
+                    # Convert to string, handling NaN
+                    df_safe[col] = df_safe[col].astype(str)
+                elif df_safe[col].dtype.name == 'category':
+                    # Convert categorical to string
+                    df_safe[col] = df_safe[col].astype(str)
+            except Exception as col_e:
+                st.warning(f"Column {col} conversion error: {str(col_e)}")
+                # If conversion fails, try a different approach
+                df_safe[col] = df_safe[col].apply(lambda x: str(x) if pd.notna(x) else '')
+        
         buffer = BytesIO()
         
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name=sheet_name, index=index)
-            
-            # Optional: Add formatting
-            workbook = writer.book
-            worksheet = writer.sheets[sheet_name]
-            
-            # Auto-adjust column widths
-            for column in worksheet.columns:
-                max_length = 0
-                column_letter = column[0].column_letter
-                
-                for cell in column:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                
-                adjusted_width = min(max_length + 2, 50)
-                worksheet.column_dimensions[column_letter].width = adjusted_width
+        # Use a simpler approach without advanced formatting
+        try:
+            # First try with openpyxl
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df_safe.to_excel(writer, sheet_name=sheet_name, index=index)
+        except Exception as e1:
+            st.warning(f"openpyxl failed: {str(e1)}")
+            # Try xlsxwriter as fallback
+            buffer.seek(0)  # Reset buffer
+            try:
+                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                    df_safe.to_excel(writer, sheet_name=sheet_name, index=index)
+            except Exception as e2:
+                st.error(f"xlsxwriter also failed: {str(e2)}")
+                # Last resort: create simple CSV in Excel format
+                buffer.seek(0)
+                df_safe.to_csv(buffer, index=index)
         
-        return buffer.getvalue()
+        excel_data = buffer.getvalue()
+        buffer.close()
+        
+        if len(excel_data) == 0:
+            st.error("Generated empty Excel data")
+            return None
+            
+        st.success(f"Excel export successful: {len(excel_data)} bytes")
+        return excel_data
         
     except Exception as e:
-        print(f"Excel export error: {str(e)}")
+        st.error(f"Excel export error: {str(e)}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
+        return None
+
+def export_to_excel_simple(df, sheet_name='Data'):
+    """Super simple Excel export - minimal error checking"""
+    try:
+        if df is None or df.empty:
+            return b''  # Return empty bytes
+        
+        # Create a new DataFrame with all columns as strings
+        df_simple = pd.DataFrame()
+        for col in df.columns:
+            df_simple[col] = df[col].astype(str)
+        
+        buffer = BytesIO()
+        df_simple.to_excel(buffer, index=False, sheet_name=sheet_name)
+        return buffer.getvalue()
+    except:
         return None
 
 def export_to_json(df, orient='records'):

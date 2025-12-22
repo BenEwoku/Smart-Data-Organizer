@@ -1938,31 +1938,59 @@ with tab4:
                     st.rerun()
             else:
                 st.caption("With formatting and styling")
+                
+                # Create a placeholder for error messages
+                excel_error = st.empty()
+                
                 try:
-                    excel_data = export_to_excel(df_export)
-                    st.download_button(
-                        label="Download Excel",
-                        data=excel_data,
-                        file_name="organized_data.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        type="primary",
-                        use_container_width=True
-                    )
+                    # First, let's create a simple test to see if Excel export works
+                    test_df = pd.DataFrame({
+                        'Test': ['Success', 'Data'],
+                        'Value': [1, 2]
+                    })
+                    
+                    # Test if basic Excel export works
+                    buffer = BytesIO()
+                    test_df.to_excel(buffer, index=False, engine='openpyxl')
+                    test_data = buffer.getvalue()
+                    
+                    if test_data:
+                        # Basic export works, now try with real data
+                        excel_data = export_to_excel(df_export)
+                        
+                        if excel_data is None:
+                            # Fallback: create Excel manually
+                            excel_error.warning("Using fallback Excel generation...")
+                            buffer = BytesIO()
+                            
+                            # Convert all columns to string to avoid any issues
+                            df_safe = df_export.copy()
+                            for col in df_safe.columns:
+                                df_safe[col] = df_safe[col].astype(str)
+                            
+                            df_safe.to_excel(buffer, index=False, engine='openpyxl')
+                            excel_data = buffer.getvalue()
+                        
+                        # Now create the download button
+                        st.download_button(
+                            label="Download Excel",
+                            data=excel_data,
+                            file_name="organized_data.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            type="primary",
+                            use_container_width=True
+                        )
+                    else:
+                        excel_error.error("Excel export not available. Please install: pip install openpyxl")
+                        
+                except ImportError as e:
+                    excel_error.error(f"Missing dependency: {str(e)}")
+                    excel_error.info("Install required package: `pip install openpyxl`")
                 except Exception as e:
-                    st.error(f"Excel export error: {str(e)}")
-        
-        with st.expander("Final Preview"):
-            st.dataframe(df_export, use_container_width=True)
-        
-        st.markdown("---")
-        if st.button("Start New Conversion", type="secondary", use_container_width=True):
-            st.session_state.df = None
-            st.session_state.data_structure = None
-            st.session_state.df_organized = None
-            st.rerun()
-        
-    else:
-        st.info("Please organize your data in the Organize tab first")
+                    excel_error.error(f"Excel export error: {str(e)}")
+                    
+                    # Offer CSV as alternative
+                    st.info("**Alternative:** Use CSV export below - it works with all data types")
 
 # Add to your tab definitions at the top of main content
 #tab1, tab2, tab3, tab4, tab5 = st.tabs(["Input", "Detect", "Organize", "Export", "Impute"])

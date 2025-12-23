@@ -23,7 +23,7 @@ class InteractiveTable:
             key: Unique key for this table instance
         """
         # Clean column names to avoid reserved names
-        self.df = self._clean_column_names(df.copy())
+        self.df = self._clean_dataframe(df.copy())
         self.original_df = self.df.copy()
         self.key = key
         
@@ -40,14 +40,13 @@ class InteractiveTable:
         self.original_df_session = st.session_state[f'{key}_original']
         self.modified_cells = st.session_state[f'{key}_modified_cells']
         self.renamed_columns = st.session_state[f'{key}_renamed_columns']
-        
-        # Track if we're currently editing column names
-        if f'{key}_editing_column' not in st.session_state:
-            st.session_state[f'{key}_editing_column'] = None
     
-    def _clean_column_names(self, df):
-        """Clean column names to avoid reserved names and issues"""
+    def _clean_dataframe(self, df):
+        """Clean dataframe to avoid issues"""
         cleaned_df = df.copy()
+        
+        # Ensure all column names are strings
+        cleaned_df.columns = [str(col) for col in cleaned_df.columns]
         
         # List of reserved column names by Streamlit data_editor
         reserved_names = [
@@ -65,10 +64,36 @@ class InteractiveTable:
         if rename_map:
             cleaned_df = cleaned_df.rename(columns=rename_map)
         
-        # Ensure all column names are strings
-        cleaned_df.columns = [str(col) for col in cleaned_df.columns]
+        # Reset index to avoid index column issues
+        cleaned_df = cleaned_df.reset_index(drop=True)
+        
+        # Ensure no duplicate column names
+        cols = pd.Series(cleaned_df.columns)
+        for dup in cols[cols.duplicated()].unique():
+            cols[cols == dup] = [f'{dup}_{i}' if i != 0 else dup for i in range(sum(cols == dup))]
+        cleaned_df.columns = cols
         
         return cleaned_df
+    
+    def _safe_compare(self, old_val, new_val):
+        """Safely compare two values, handling NaN and different types"""
+        try:
+            # Handle NaN comparison
+            if pd.isna(old_val) and pd.isna(new_val):
+                return True
+            
+            # Handle None comparison
+            if old_val is None and new_val is None:
+                return True
+            
+            # Try direct comparison
+            return old_val == new_val
+        except:
+            # If comparison fails, convert to strings
+            try:
+                return str(old_val) == str(new_val)
+            except:
+                return False
     
     def save_state(self):
         """Save current state to history for undo/redo"""
@@ -319,10 +344,8 @@ class InteractiveTable:
         
         # Escape regex special characters to avoid errors
         try:
-            # Try to escape the term for safe regex matching
             escaped_term = re.escape(term)
         except:
-            # If escaping fails, use the term as-is
             escaped_term = term
         
         if column == "All columns":
@@ -331,26 +354,32 @@ class InteractiveTable:
             search_cols = [column]
         
         for col in search_cols:
-            if self.df[col].dtype == 'object':
-                try:
-                    if case_sensitive:
-                        mask = self.df[col].astype(str).str.contains(escaped_term, na=False, regex=True)
-                    else:
-                        mask = self.df[col].astype(str).str.contains(escaped_term, case=False, na=False, regex=True)
-                    
-                    matching_indices = self.df[mask].index.tolist()
-                    for idx in matching_indices:
-                        matches.append((idx, col))
-                except re.error:
-                    # If regex fails, do simple string search
-                    if case_sensitive:
-                        mask = self.df[col].astype(str).str.contains(term, na=False, regex=False)
-                    else:
-                        mask = self.df[col].astype(str).str.lower().str.contains(term.lower(), na=False, regex=False)
-                    
-                    matching_indices = self.df[mask].index.tolist()
-                    for idx in matching_indices:
-                        matches.append((idx, col))
+            try:
+                # Convert column to string for safe searching
+                col_data = self.df[col].astype(str)
+                
+                if case_sensitive:
+                    mask = col_data.str.contains(escaped_term, na=False, regex=True)
+                else:
+                    mask = col_data.str.contains(escaped_term, case=False, na=False, regex=True)
+                
+                matching_indices = self.df[mask].index.tolist()
+                for idx in matching_indices:
+                    matches.append((idx, col))
+            except re.error:
+                # If regex fails, do simple string search
+                col_data = self.df[col].astype(str)
+                if case_sensitive:
+                    mask = col_data.str.contains(term, na=False, regex=False)
+                else:
+                    mask = col_data.str.lower().str.contains(term.lower(), na=False, regex=False)
+                
+                matching_indices = self.df[mask].index.tolist()
+                for idx in matching_indices:
+                    matches.append((idx, col))
+            except Exception:
+                # Skip columns that can't be searched
+                continue
         
         return matches
     
@@ -378,7 +407,11 @@ class InteractiveTable:
                 self.renamed_columns[old_name] = new_name
             else:
                 # Update the rename chain
-                original_name = list(self.renamed_columns.keys())[list(self.renamed_columns.values()).index(old_name)] if old_name in self.renamed_columns.values() else old_name
+                original_name = old_name
+                for key, value in self.renamed_columns.items():
+                    if value == old_name:
+                        original_name = key
+                        break
                 self.renamed_columns[original_name] = new_name
             
             # Actually rename the column
@@ -393,35 +426,12 @@ class InteractiveTable:
             # Remove from renamed columns tracking if present
             if col_name in self.renamed_columns:
                 del self.renamed_columns[col_name]
-            elif col_name in self.renamed_columns.values():
-                # Find the key that maps to this column
-                for key, value in list(self.renamed_columns.items()):
-                    if value == col_name:
-                        del self.renamed_columns[key]
-                        break
             
             # Actually delete the column
             self.df = self.df.drop(columns=[col_name])
             self.save_state()
             return True
         return False
-    
-    def edit_cell(self, row_idx, col_name, new_value):
-        """Edit single cell"""
-        old_value = self.df.at[row_idx, col_name]
-        
-        # Try to maintain data type
-        try:
-            if pd.api.types.is_numeric_dtype(self.df[col_name]):
-                new_value = pd.to_numeric(new_value)
-            elif pd.api.types.is_datetime64_any_dtype(self.df[col_name]):
-                new_value = pd.to_datetime(new_value)
-        except:
-            pass
-        
-        self.df.at[row_idx, col_name] = new_value
-        self.modified_cells.add((row_idx, col_name))
-        self.save_state()
     
     def render(self):
         """Render the interactive table"""
@@ -447,46 +457,41 @@ class InteractiveTable:
         
         # Render editable table using Streamlit's data_editor
         try:
+            # Create column configuration
+            column_config = {}
+            for col in self.df.columns:
+                column_config[col] = st.column_config.Column(
+                    col,
+                    help=f"Edit values in {col} column"
+                )
+            
             edited_df = st.data_editor(
                 self.df,
                 use_container_width=True,
-                num_rows="dynamic",  # Allow adding/deleting rows
+                num_rows="dynamic",
                 key=f"{self.key}_editor",
                 height=400,
-                column_config={
-                    col: st.column_config.Column(
-                        col,
-                        help=f"Edit values in {col} column"
-                    ) for col in self.df.columns
-                }
+                column_config=column_config
             )
             
-            # Detect changes
-            if not edited_df.equals(self.df):
-                # Find what changed
-                for col in self.df.columns:
-                    if col in edited_df.columns:
-                        try:
-                            # Handle NaN comparison
-                            changed_mask = (self.df[col] != edited_df[col]) & ~(
-                                self.df[col].isna() & edited_df[col].isna()
-                            )
-                            changed_indices = self.df[changed_mask].index.tolist()
-                            
-                            for idx in changed_indices:
-                                self.modified_cells.add((idx, col))
-                        except:
-                            # If comparison fails, check for any non-identical values
+            # Safely detect changes
+            try:
+                if not edited_df.equals(self.df):
+                    # Find what changed
+                    for col in self.df.columns:
+                        if col in edited_df.columns:
                             for idx in range(len(self.df)):
                                 old_val = self.df.at[idx, col]
                                 new_val = edited_df.at[idx, col]
                                 
-                                # Handle NaN comparison
-                                if pd.isna(old_val) and pd.isna(new_val):
-                                    continue
-                                if old_val != new_val:
+                                if not self._safe_compare(old_val, new_val):
                                     self.modified_cells.add((idx, col))
-                
+                    
+                    self.df = edited_df.copy()
+                    self.save_state()
+            except Exception as e:
+                # If change detection fails, assume changes were made
+                st.warning("Change detection failed, but changes may have been made")
                 self.df = edited_df.copy()
                 self.save_state()
             
@@ -497,7 +502,7 @@ class InteractiveTable:
             return self.df
             
         except Exception as e:
-            st.error(f"Error rendering table editor: {type(e).__name__}")
+            st.error(f"Error rendering table editor: {type(e).__name__} - {str(e)}")
             st.info("Falling back to read-only view...")
             
             # Show read-only view
@@ -524,7 +529,9 @@ def show_interactive_table(df, key="main_table"):
         table = InteractiveTable(df, key=key)
         return table.render()
     except Exception as e:
-        st.error(f"Error creating interactive table: {type(e).__name__}")
+        st.error(f"Error creating interactive table: {type(e).__name__} - {str(e)}")
+        with st.expander("Error Details"):
+            st.code(str(e))
         st.info("Showing read-only view instead...")
         st.dataframe(df, use_container_width=True, height=400)
         return df

@@ -2517,24 +2517,8 @@ with tab3:
             
             st.info("Interactive mode enabled! Click any cell to edit. Changes save automatically.")
             
-            # Check for reserved column names before creating InteractiveTable
-            df_for_edit = df_organized.copy()
-            
-            # Check if any column is named '_index' and rename it
-            if '_index' in df_for_edit.columns:
-                st.warning("Column '_index' is a reserved name. Renaming to 'index_col'...")
-                df_for_edit = df_for_edit.rename(columns={'_index': 'index_col'})
-            
-            # Also check for other reserved names
-            reserved_names = ['_selected_rows', '_selected_row_indices', '_selection']
-            for reserved in reserved_names:
-                if reserved in df_for_edit.columns:
-                    new_name = f"{reserved}_col"
-                    df_for_edit = df_for_edit.rename(columns={reserved: new_name})
-                    st.info(f"Renamed reserved column '{reserved}' to '{new_name}'")
-            
             # Create instance of your InteractiveTable with cleaned DataFrame
-            interactive_table = InteractiveTable(df_for_edit, key="organize_table")
+            interactive_table = InteractiveTable(df_organized, key="organize_table")
             
             # Display keyboard shortcuts
             with st.expander("Keyboard Shortcuts", expanded=False):
@@ -2589,50 +2573,24 @@ with tab3:
             st.error(f"Error in interactive mode: {type(e).__name__}")
             
             # Show detailed error for debugging
-            with st.expander("Error Details", expanded=False):
+            with st.expander("Error Details", expanded=True):
                 st.code(str(e))
-                st.markdown("**Troubleshooting:**")
+                st.markdown("**Common issues:**")
                 st.markdown("""
-                1. Check if any column is named `_index`, `_selected_rows`, etc.
-                2. Try disabling interactive mode
-                3. Check that all column names are valid strings
-                4. Look for special regex characters in your data
+                1. **Data type issues**: Some columns may have mixed data types
+                2. **Special characters**: Column names or data may contain special characters
+                3. **Memory issues**: Very large datasets may cause problems
+                4. **Column name conflicts**: Duplicate or reserved column names
                 """)
+                
+                # Try to identify the specific issue
+                st.markdown("**Debugging info:**")
+                if 'df_organized' in locals():
+                    st.write(f"- DataFrame shape: {df_organized.shape}")
+                    st.write(f"- Column names: {list(df_organized.columns)}")
+                    st.write(f"- Column dtypes: {df_organized.dtypes.to_dict()}")
             
             # Fallback to regular display
-            st.dataframe(df_organized, use_container_width=True, height=400)
-    else:
-        # VIEW MODE - Regular display
-        if structure == "Email Data" and 'Spam_Score' in df_organized.columns:
-            # Create a styled dataframe that highlights spam
-            display_df = df_organized.copy()
-            
-            # Add color coding for spam
-            def highlight_spam(row):
-                if row['Spam_Score'] >= 70:
-                    return ['background-color: #ffcccc'] * len(row)
-                elif row['Spam_Score'] >= 50:
-                    return ['background-color: #fff3cd'] * len(row)
-                else:
-                    return [''] * len(row)
-            
-            # Show styled dataframe
-            st.dataframe(
-                display_df.style.apply(highlight_spam, axis=1),
-                use_container_width=True,
-                height=400
-            )
-            
-            # Legend for spam highlighting
-            col_legend1, col_legend2, col_legend3 = st.columns(3)
-            with col_legend1:
-                st.markdown('<div style="background-color: #ffcccc; padding: 5px; border-radius: 3px;">Likely spam (≥70)</div>', unsafe_allow_html=True)
-            with col_legend2:
-                st.markdown('<div style="background-color: #fff3cd; padding: 5px; border-radius: 3px;">Suspicious (50-69)</div>', unsafe_allow_html=True)
-            with col_legend3:
-                st.markdown('<div style="background-color: #d4edda; padding: 5px; border-radius: 3px;">Clean (<50)</div>', unsafe_allow_html=True)
-        else:
-            # Regular dataframe display for non-email data
             st.dataframe(df_organized, use_container_width=True, height=400)
     # ========== END DISPLAY MODE ==========
 

@@ -55,7 +55,6 @@ class InteractiveTable:
             if col in reserved_names:
                 new_name = f"col_{col}"
                 rename_map[col] = new_name
-                st.warning(f"Renaming reserved column '{col}' to '{new_name}'")
         
         if rename_map:
             cleaned_df = cleaned_df.rename(columns=rename_map)
@@ -64,11 +63,6 @@ class InteractiveTable:
         cleaned_df.columns = [str(col) for col in cleaned_df.columns]
         
         return cleaned_df
-    
-    def _restore_original_column_names(self, df, original_df):
-        """Restore original column names if they were changed"""
-        # This is for display purposes - we'll keep internal names clean
-        return df
     
     def save_state(self):
         """Save current state to history for undo/redo"""
@@ -223,14 +217,26 @@ class InteractiveTable:
                 matches = self.search(search_term, search_column, case_sensitive)
                 if matches:
                     st.success(f"Found {len(matches)} match(es)")
-                    # Highlight matching rows
                     return matches
+                else:
+                    st.info("No matches found")
         
         return None
     
     def search(self, term, column="All columns", case_sensitive=False):
-        """Search table for term"""
+        """Search table for term with safe regex handling"""
         matches = []
+        
+        if not term:
+            return matches
+        
+        # Escape regex special characters to avoid errors
+        try:
+            # Try to escape the term for safe regex matching
+            escaped_term = re.escape(term)
+        except:
+            # If escaping fails, use the term as-is
+            escaped_term = term
         
         if column == "All columns":
             search_cols = self.df.columns
@@ -239,14 +245,25 @@ class InteractiveTable:
         
         for col in search_cols:
             if self.df[col].dtype == 'object':
-                if case_sensitive:
-                    mask = self.df[col].astype(str).str.contains(term, na=False)
-                else:
-                    mask = self.df[col].astype(str).str.contains(term, case=False, na=False)
-                
-                matching_indices = self.df[mask].index.tolist()
-                for idx in matching_indices:
-                    matches.append((idx, col))
+                try:
+                    if case_sensitive:
+                        mask = self.df[col].astype(str).str.contains(escaped_term, na=False, regex=True)
+                    else:
+                        mask = self.df[col].astype(str).str.contains(escaped_term, case=False, na=False, regex=True)
+                    
+                    matching_indices = self.df[mask].index.tolist()
+                    for idx in matching_indices:
+                        matches.append((idx, col))
+                except re.error:
+                    # If regex fails, do simple string search
+                    if case_sensitive:
+                        mask = self.df[col].astype(str).str.contains(term, na=False, regex=False)
+                    else:
+                        mask = self.df[col].astype(str).str.lower().str.contains(term.lower(), na=False, regex=False)
+                    
+                    matching_indices = self.df[mask].index.tolist()
+                    for idx in matching_indices:
+                        matches.append((idx, col))
         
         return matches
     
@@ -256,11 +273,6 @@ class InteractiveTable:
         self.df = pd.concat([self.df, pd.DataFrame([new_row])], ignore_index=True)
         self.save_state()
         st.rerun()
-    
-    def delete_rows(self, indices):
-        """Delete rows by indices"""
-        self.df = self.df.drop(indices).reset_index(drop=True)
-        self.save_state()
     
     def edit_cell(self, row_idx, col_name, new_value):
         """Edit single cell"""
@@ -278,30 +290,6 @@ class InteractiveTable:
         self.df.at[row_idx, col_name] = new_value
         self.modified_cells.add((row_idx, col_name))
         self.save_state()
-    
-    def rename_column(self, old_name, new_name):
-        """Rename column"""
-        if new_name and new_name != old_name and new_name not in self.df.columns:
-            self.df = self.df.rename(columns={old_name: new_name})
-            self.save_state()
-            return True
-        return False
-    
-    def delete_column(self, col_name):
-        """Delete column"""
-        if col_name in self.df.columns:
-            self.df = self.df.drop(columns=[col_name])
-            self.save_state()
-            return True
-        return False
-    
-    def sort_by_column(self, col_name, ascending=True):
-        """Sort table by column"""
-        if col_name in self.df.columns:
-            self.df = self.df.sort_values(col_name, ascending=ascending)
-            self.save_state()
-            return True
-        return False
     
     def render(self):
         """Render the interactive table"""
@@ -373,7 +361,7 @@ class InteractiveTable:
             return self.df
             
         except Exception as e:
-            st.error(f"Error rendering table editor: {str(e)}")
+            st.error(f"Error rendering table editor: {type(e).__name__}")
             st.info("Falling back to read-only view...")
             
             # Show read-only view
@@ -396,5 +384,11 @@ def show_interactive_table(df, key="main_table"):
     Returns:
         pd.DataFrame: Modified DataFrame
     """
-    table = InteractiveTable(df, key=key)
-    return table.render()
+    try:
+        table = InteractiveTable(df, key=key)
+        return table.render()
+    except Exception as e:
+        st.error(f"Error creating interactive table: {type(e).__name__}")
+        st.info("Showing read-only view instead...")
+        st.dataframe(df, use_container_width=True, height=400)
+        return df

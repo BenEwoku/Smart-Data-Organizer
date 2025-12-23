@@ -2556,12 +2556,8 @@ with tab3:
             # Render the interactive table
             edited_df = interactive_table.render()
             
-            # Store back the edited data (keeping original column names if they were renamed)
+            # Store back the edited data
             df_organized = edited_df.copy()
-            
-            # Restore original column names if they were changed
-            if '_index' in df_organized.columns and 'index_col' in df_organized.columns:
-                df_organized = df_organized.rename(columns={'index_col': '_index'})
             
             # Show changes summary
             changes = interactive_table.get_changes_summary()
@@ -2580,7 +2576,7 @@ with tab3:
             st.dataframe(df_organized, use_container_width=True, height=400)
             
         except Exception as e:
-            st.error(f"Error in interactive mode: {str(e)}")
+            st.error(f"Error in interactive mode: {type(e).__name__}")
             
             # Show detailed error for debugging
             with st.expander("Error Details", expanded=False):
@@ -2590,6 +2586,7 @@ with tab3:
                 1. Check if any column is named `_index`, `_selected_rows`, etc.
                 2. Try disabling interactive mode
                 3. Check that all column names are valid strings
+                4. Look for special regex characters in your data
                 """)
             
             # Fallback to regular display

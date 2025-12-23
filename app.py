@@ -2515,10 +2515,26 @@ with tab3:
             # Import your custom InteractiveTable
             from utils.interactive_table import InteractiveTable
             
-            st.info("💡 **Interactive mode enabled!** Click any cell to edit. Changes save automatically.")
+            st.info("**Interactive mode enabled!** Click any cell to edit. Changes save automatically.")
             
-            # Create instance of your InteractiveTable
-            interactive_table = InteractiveTable(df_organized, key="organize_table")
+            # Check for reserved column names before creating InteractiveTable
+            df_for_edit = df_organized.copy()
+            
+            # Check if any column is named '_index' and rename it
+            if '_index' in df_for_edit.columns:
+                st.warning("Column '_index' is a reserved name. Renaming to 'index_col'...")
+                df_for_edit = df_for_edit.rename(columns={'_index': 'index_col'})
+            
+            # Also check for other reserved names
+            reserved_names = ['_selected_rows', '_selected_row_indices', '_selection']
+            for reserved in reserved_names:
+                if reserved in df_for_edit.columns:
+                    new_name = f"{reserved}_col"
+                    df_for_edit = df_for_edit.rename(columns={reserved: new_name})
+                    st.info(f"Renamed reserved column '{reserved}' to '{new_name}'")
+            
+            # Create instance of your InteractiveTable with cleaned DataFrame
+            interactive_table = InteractiveTable(df_for_edit, key="organize_table")
             
             # Display keyboard shortcuts
             with st.expander("Keyboard Shortcuts", expanded=False):
@@ -2538,7 +2554,14 @@ with tab3:
                 """)
             
             # Render the interactive table
-            df_organized = interactive_table.render()
+            edited_df = interactive_table.render()
+            
+            # Store back the edited data (keeping original column names if they were renamed)
+            df_organized = edited_df.copy()
+            
+            # Restore original column names if they were changed
+            if '_index' in df_organized.columns and 'index_col' in df_organized.columns:
+                df_organized = df_organized.rename(columns={'index_col': '_index'})
             
             # Show changes summary
             changes = interactive_table.get_changes_summary()
@@ -2559,41 +2582,17 @@ with tab3:
         except Exception as e:
             st.error(f"Error in interactive mode: {str(e)}")
             
+            # Show detailed error for debugging
+            with st.expander("Error Details", expanded=False):
+                st.code(str(e))
+                st.markdown("**Troubleshooting:**")
+                st.markdown("""
+                1. Check if any column is named `_index`, `_selected_rows`, etc.
+                2. Try disabling interactive mode
+                3. Check that all column names are valid strings
+                """)
+            
             # Fallback to regular display
-            st.dataframe(df_organized, use_container_width=True, height=400)
-            
-    else:
-        # VIEW MODE - Regular display
-        if structure == "Email Data" and 'Spam_Score' in df_organized.columns:
-            # Create a styled dataframe that highlights spam
-            display_df = df_organized.copy()
-            
-            # Add color coding for spam
-            def highlight_spam(row):
-                if row['Spam_Score'] >= 70:
-                    return ['background-color: #ffcccc'] * len(row)
-                elif row['Spam_Score'] >= 50:
-                    return ['background-color: #fff3cd'] * len(row)
-                else:
-                    return [''] * len(row)
-            
-            # Show styled dataframe
-            st.dataframe(
-                display_df.style.apply(highlight_spam, axis=1),
-                use_container_width=True,
-                height=400
-            )
-            
-            # Legend for spam highlighting
-            col_legend1, col_legend2, col_legend3 = st.columns(3)
-            with col_legend1:
-                st.markdown('<div style="background-color: #ffcccc; padding: 5px; border-radius: 3px;">Likely spam (≥70)</div>', unsafe_allow_html=True)
-            with col_legend2:
-                st.markdown('<div style="background-color: #fff3cd; padding: 5px; border-radius: 3px;">Suspicious (50-69)</div>', unsafe_allow_html=True)
-            with col_legend3:
-                st.markdown('<div style="background-color: #d4edda; padding: 5px; border-radius: 3px;">Clean (<50)</div>', unsafe_allow_html=True)
-        else:
-            # Regular dataframe display for non-email data
             st.dataframe(df_organized, use_container_width=True, height=400)
     # ========== END DISPLAY MODE ==========
 

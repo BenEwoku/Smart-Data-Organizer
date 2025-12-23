@@ -205,7 +205,7 @@ def calculate_spam_score(subject, domain, body, sender_email):
     
     # Suspicious domains
     suspicious_domains = [
-        'promo.', 'offer.', 'discount.', 'deal.', 'sale.',
+        'promo.', 'offer.', 'discount.', 'deal.', 'sale.','win.', 'prize.',
         'newsletter.', 'marketing.', 'advertising.', 'bulk.'
     ]
     
@@ -1107,7 +1107,7 @@ with tab1:
                 )
                 
                 # ========== NEW: SHEET SELECTION FOR CSV FILES ==========
-                elif file_ext == 'csv':
+                if file_ext == 'csv':
                     # For CSV, check if it might have multiple sheets/tables
                     try:
                         # Read the entire CSV to check for multiple tables

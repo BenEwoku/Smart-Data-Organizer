@@ -246,7 +246,7 @@ def detect_data_structure(df):
             
     except Exception as e:
         # CRITICAL: Always return a valid tuple even if detection fails
-        print(f"⚠️ Detection error: {str(e)}")
+        print(f"Detection error: {str(e)}")
         return "General Data", None, None
     
     # Safety fallback (should never reach here)

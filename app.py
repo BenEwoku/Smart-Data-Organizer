@@ -1176,11 +1176,15 @@ with tab1:
                         # If multi-table detection fails, just proceed normally
                         pass
                 # ========== END SHEET SELECTION ==========
-                
+
                 with st.spinner(f"Reading {file_ext.upper()} file..."):
                     try:
                         # Import the file parser
                         from utils.file_parser import parse_uploaded_file
+                        
+                        # ========== CRITICAL FIX: RESET FILE POINTER ==========
+                        uploaded_file.seek(0)  # RESET TO BEGINNING BEFORE PARSING
+                        # ========== END FIX ==========
                         
                         # Pass sheet_name to the parser if it's an Excel file
                         df_raw = parse_uploaded_file(uploaded_file, sheet_name=sheet_name)

@@ -71,42 +71,31 @@ def parse_uploaded_file(uploaded_file, sheet_name=None):
             "Type": [file_ext]
         })
 
-def parse_csv(file, section_name=None):
+def get_excel_sheet_names(file):
+    """Get list of sheet names from an uploaded Excel file."""
+    try:
+        # Reset file pointer and read sheet names
+        file.seek(0)
+        excel_file = pd.ExcelFile(file)
+        return excel_file.sheet_names
+    except Exception as e:
+        st.error(f"Could not read Excel file sheets: {str(e)}")
+        return []
+
+def parse_csv(file):
     """Parse CSV file - always returns DataFrame"""
     try:
-        if section_name:
-            # If section_name is provided, it means we've already extracted a specific section
-            # and 'file' is actually a BytesIO object with that section
-            try:
-                df = pd.read_csv(file)
-                return df
-            except Exception as e:
-                # Try different encodings for the section
-                try:
-                    file.seek(0)  # Reset file pointer
-                    df = pd.read_csv(file, encoding='latin-1')
-                    return df
-                except:
-                    st.error(f"CSV section parsing error: {str(e)}")
-                    return pd.DataFrame({"Error": [f"CSV section parsing failed: {str(e)[:100]}"]})
-        else:
-            # Normal CSV parsing
-            try:
-                df = pd.read_csv(file)
-                return df
-            except Exception as e:
-                # Try different encodings
-                try:
-                    file.seek(0)  # Reset file pointer
-                    df = pd.read_csv(file, encoding='latin-1')
-                    return df
-                except:
-                    st.error(f"CSV parsing error: {str(e)}")
-                    # Return empty DataFrame instead of None
-                    return pd.DataFrame({"Error": [f"CSV parsing failed: {str(e)[:100]}"]})
+        df = pd.read_csv(file)
+        return df
     except Exception as e:
-        st.error(f"CSV parsing error: {str(e)}")
-        return pd.DataFrame({"Error": [f"CSV parsing failed: {str(e)[:100]}"]})
+        # Try different encodings
+        try:
+            df = pd.read_csv(file, encoding='latin-1')
+            return df
+        except:
+            st.error(f"CSV parsing error: {str(e)}")
+            # Return empty DataFrame instead of None
+            return pd.DataFrame({"Error": [f"CSV parsing failed: {str(e)[:100]}"]})
 
 def parse_excel(file, sheet_name=None):
     """Parse Excel file - always returns DataFrame"""

@@ -2371,7 +2371,7 @@ with tab3:
     
     # ========== EMAIL SPAM FILTERING OPTIONS ==========
     if structure == "Email Data":
-        st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">📧 Email Organization Options</h3>', unsafe_allow_html=True)
+        st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Email Organization Options</h3>', unsafe_allow_html=True)
         
         # Check if we need to calculate spam scores
         if 'Spam_Score' not in df_organized.columns:
@@ -2390,7 +2390,7 @@ with tab3:
                     df_organized['Is_Spam'] = df_organized['Spam_Score'] >= 70
                     
                     spam_count = len(df_organized[df_organized['Is_Spam']])
-                    st.success(f"✅ Spam analysis complete: {spam_count} likely spam emails detected")
+                    st.success(f"Spam analysis complete: {spam_count} likely spam emails detected")
                 else:
                     # Fallback: Calculate simple spam score
                     from utils.detection import calculate_spam_score
@@ -2498,80 +2498,72 @@ with tab3:
     if cols_to_keep:
         df_organized = df_organized[cols_to_keep]
     
-    # ========== NEW: ADD THIS TOGGLE ==========
+    # ========== INTERACTIVE EDITING TOGGLE ==========
     st.markdown("---")
     use_interactive = st.checkbox(
         "Enable Interactive Editing", 
         value=False,
         help="Switch to interactive table editor with inline editing, search, and undo/redo"
     )
-    # ========== END NEW SECTION ==========
+    # ========== END TOGGLE ==========
     
     st.markdown('<h3 style="font-size: 1.6rem; font-weight: 600;">Organized Data Preview</h3>', unsafe_allow_html=True)
     
-    # ========== MODIFIED SECTION STARTS HERE ==========
+    # ========== INTERACTIVE VS VIEW MODE ==========
     if use_interactive:
-        # Import interactive table
         try:
-            from utils.interactive_table import show_interactive_table
-            from utils.keyboard_shortcuts import inject_keyboard_shortcuts, show_keyboard_shortcuts_guide
+            # Import your custom InteractiveTable
+            from utils.interactive_table import InteractiveTable
             
-            st.info("💡 Interactive mode enabled! Click any cell to edit. Changes save automatically.")
+            st.info("💡 **Interactive mode enabled!** Click any cell to edit. Changes save automatically.")
             
-            # Show keyboard shortcuts guide
-            show_keyboard_shortcuts_guide()
+            # Create instance of your InteractiveTable
+            interactive_table = InteractiveTable(df_organized, key="organize_table")
             
-            # Show interactive table
-            df_organized = show_interactive_table(df_organized, key="organize_table")
+            # Display keyboard shortcuts
+            with st.expander("Keyboard Shortcuts", expanded=False):
+                st.markdown("""
+                **In Interactive Mode:**
+                - Click any cell to edit
+                - Press Enter to save changes
+                - Tab to move between cells
+                - Use toolbar buttons for Undo/Redo
+                - Right-click for context menu options
+                
+                **Hotkeys (when table is focused):**
+                - Ctrl+F: Search
+                - Ctrl+Z: Undo
+                - Ctrl+Y: Redo
+                - Ctrl+A: Select all
+                """)
             
-            # Inject keyboard shortcuts
-            inject_keyboard_shortcuts()
+            # Render the interactive table
+            df_organized = interactive_table.render()
             
-        except ImportError:
-            st.error("Interactive table feature not available. Please install required dependencies.")
-            st.code("pip install streamlit-ag-grid pandas")
+            # Show changes summary
+            changes = interactive_table.get_changes_summary()
+            if changes:
+                st.success(f"**{changes['modified_cells']} cells modified** in {changes['modified_rows']} rows")
+            
+        except ImportError as e:
+            st.error("Interactive table feature not available.")
+            st.info("""
+            **Required:**
+            1. Make sure `utils/interactive_table.py` exists
+            2. Using Streamlit 1.28.0 or higher (for data_editor)
+            """)
             
             # Fallback to regular display
-            if structure == "Email Data" and 'Spam_Score' in df_organized.columns:
-                # Create a styled dataframe that highlights spam
-                display_df = df_organized.copy()
-                
-                # Add color coding for spam
-                def highlight_spam(row):
-                    if row['Spam_Score'] >= 70:
-                        return ['background-color: #ffcccc'] * len(row)
-                    elif row['Spam_Score'] >= 50:
-                        return ['background-color: #fff3cd'] * len(row)
-                    else:
-                        return [''] * len(row)
-                
-                # Show styled dataframe
-                st.dataframe(
-                    display_df.style.apply(highlight_spam, axis=1),
-                    use_container_width=True,
-                    height=400
-                )
-                
-                # Legend for spam highlighting
-                col_legend1, col_legend2, col_legend3 = st.columns(3)
-                with col_legend1:
-                    st.markdown('<div style="background-color: #ffcccc; padding: 5px; border-radius: 3px;">Likely spam (≥70)</div>', unsafe_allow_html=True)
-                with col_legend2:
-                    st.markdown('<div style="background-color: #fff3cd; padding: 5px; border-radius: 3px;">Suspicious (50-69)</div>', unsafe_allow_html=True)
-                with col_legend3:
-                    st.markdown('<div style="background-color: #d4edda; padding: 5px; border-radius: 3px;">Clean (<50)</div>', unsafe_allow_html=True)
-            else:
-                # Regular dataframe display for non-email data
-                st.dataframe(df_organized, use_container_width=True, height=400)
-                
+            st.dataframe(df_organized, use_container_width=True, height=400)
+            
         except Exception as e:
-            st.error(f"Error loading interactive table: {str(e)}")
+            st.error(f"Error in interactive mode: {str(e)}")
+            
             # Fallback to regular display
             st.dataframe(df_organized, use_container_width=True, height=400)
             
     else:
-        # KEEP YOUR EXISTING DISPLAY CODE
-        # Show data preview with spam highlights if applicable
+        # VIEW MODE - Regular display
         if structure == "Email Data" and 'Spam_Score' in df_organized.columns:
             # Create a styled dataframe that highlights spam
             display_df = df_organized.copy()
@@ -2603,7 +2595,7 @@ with tab3:
         else:
             # Regular dataframe display for non-email data
             st.dataframe(df_organized, use_container_width=True, height=400)
-    # ========== MODIFIED SECTION ENDS HERE ==========
+    # ========== END DISPLAY MODE ==========
 
     with st.expander("Summary Statistics"):
         if len(df_organized.select_dtypes(include=['number']).columns) > 0:
@@ -2617,31 +2609,35 @@ with tab3:
     # Action buttons
     st.markdown("---")
     
-    # Adjust button layout based on whether interactive mode is enabled
+    # Adjust button layout based on mode
     if use_interactive:
         col_action1, col_action2, col_action3, col_action4 = st.columns(4)
         
         with col_action1:
-            if st.button("Save Changes", type="primary", use_container_width=True):
-                st.success("Interactive edits saved!")
+            if st.button("Save All Changes", type="primary", use_container_width=True):
+                # Changes are already saved automatically by InteractiveTable
+                st.success("All changes have been saved!")
                 st.rerun()
         
         with col_action2:
-            if st.button("Undo Last Edit", type="secondary", use_container_width=True):
-                # This would work with undo/redo functionality in interactive table
-                st.info("Use Ctrl+Z in interactive mode to undo")
-        
-        with col_action3:
             if st.button("Switch to View Mode", type="secondary", use_container_width=True):
-                # Turn off interactive mode
                 use_interactive = False
                 st.info("Switching to view-only mode...")
                 st.rerun()
         
-        with col_action4:
-            if st.button("Go to Export", type="secondary", use_container_width=True):
+        with col_action3:
+            if st.button("Export Now", type="secondary", use_container_width=True):
                 st.info("Proceeding to Export tab...")
                 st.markdown("Please click on the **Export** tab above to save your organized data")
+        
+        with col_action4:
+            if st.button("Reset View", type="secondary", use_container_width=True):
+                # Reset sorting/filtering but keep edits
+                df_organized = df_organized.sort_index()
+                st.session_state.df_organized = df_organized
+                st.success("View reset to original order")
+                st.rerun()
+                
     else:
         col_action1, col_action2, col_action3 = st.columns(3)
         

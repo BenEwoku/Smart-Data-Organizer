@@ -11,7 +11,7 @@ import re
 class InteractiveTable:
     """
     Interactive table editor component
-    Supports inline editing, search, filter, sort, copy/paste, undo/redo
+    Supports inline editing, search, filter, sort, copy/paste, undo/redo, and column renaming
     """
     
     def __init__(self, df, key="interactive_table"):
@@ -33,11 +33,17 @@ class InteractiveTable:
             st.session_state[f'{key}_history_index'] = -1
             st.session_state[f'{key}_original'] = self.df.copy()
             st.session_state[f'{key}_modified_cells'] = set()
+            st.session_state[f'{key}_renamed_columns'] = {}
         
         self.history = st.session_state[f'{key}_history']
         self.history_index = st.session_state[f'{key}_history_index']
         self.original_df_session = st.session_state[f'{key}_original']
         self.modified_cells = st.session_state[f'{key}_modified_cells']
+        self.renamed_columns = st.session_state[f'{key}_renamed_columns']
+        
+        # Track if we're currently editing column names
+        if f'{key}_editing_column' not in st.session_state:
+            st.session_state[f'{key}_editing_column'] = None
     
     def _clean_column_names(self, df):
         """Clean column names to avoid reserved names and issues"""
@@ -53,7 +59,7 @@ class InteractiveTable:
         rename_map = {}
         for col in cleaned_df.columns:
             if col in reserved_names:
-                new_name = f"col_{col}"
+                new_name = f"column_{col}"
                 rename_map[col] = new_name
         
         if rename_map:
@@ -73,6 +79,7 @@ class InteractiveTable:
         self.history.append({
             'df': self.df.copy(),
             'modified_cells': self.modified_cells.copy(),
+            'renamed_columns': self.renamed_columns.copy(),
             'timestamp': datetime.now(),
             'action': 'edit'
         })
@@ -94,6 +101,7 @@ class InteractiveTable:
             state = self.history[self.history_index]
             self.df = state['df'].copy()
             self.modified_cells = state['modified_cells'].copy()
+            self.renamed_columns = state['renamed_columns'].copy()
             
             st.session_state[f'{self.key}_history_index'] = self.history_index
             return True
@@ -106,6 +114,7 @@ class InteractiveTable:
             state = self.history[self.history_index]
             self.df = state['df'].copy()
             self.modified_cells = state['modified_cells'].copy()
+            self.renamed_columns = state['renamed_columns'].copy()
             
             st.session_state[f'{self.key}_history_index'] = self.history_index
             return True
@@ -115,22 +124,22 @@ class InteractiveTable:
         """Revert to original data"""
         self.df = self.original_df.copy()
         self.modified_cells = set()
+        self.renamed_columns = {}
         self.history = []
         self.history_index = -1
         
         st.session_state[f'{self.key}_history'] = []
         st.session_state[f'{self.key}_history_index'] = -1
         st.session_state[f'{self.key}_modified_cells'] = set()
+        st.session_state[f'{self.key}_renamed_columns'] = {}
     
     def get_changes_summary(self):
         """Get summary of changes made"""
-        if not self.modified_cells:
-            return None
-        
         summary = {
             'modified_cells': len(self.modified_cells),
             'modified_rows': len(set(row for row, col in self.modified_cells)),
-            'modified_columns': len(set(col for row, col in self.modified_cells))
+            'modified_columns': len(set(col for row, col in self.modified_cells)),
+            'renamed_columns': len(self.renamed_columns)
         }
         return summary
     
@@ -157,7 +166,7 @@ class InteractiveTable:
                     st.rerun()
         
         with col3:
-            if st.button("Reset", key=f"{self.key}_revert",
+            if st.button("Reset All", key=f"{self.key}_revert",
                         help="Discard all changes and revert to original"):
                 if st.session_state.get(f"{self.key}_confirm_revert"):
                     self.revert_all()
@@ -174,16 +183,94 @@ class InteractiveTable:
                 self.add_row()
         
         with col5:
-            if st.button("Search", key=f"{self.key}_search",
-                        help="Search table (Ctrl+F)"):
-                st.session_state[f"{self.key}_show_search"] = not st.session_state.get(f"{self.key}_show_search", False)
+            if st.button("Rename Columns", key=f"{self.key}_rename_cols",
+                        help="Rename table columns"):
+                st.session_state[f"{self.key}_show_rename"] = not st.session_state.get(f"{self.key}_show_rename", False)
+                st.rerun()
         
         with col6:
             changes = self.get_changes_summary()
-            if changes:
-                st.info(f"{changes['modified_cells']} cells edited")
+            if changes['modified_cells'] > 0 or changes['renamed_columns'] > 0:
+                changes_text = []
+                if changes['modified_cells'] > 0:
+                    changes_text.append(f"{changes['modified_cells']} cells edited")
+                if changes['renamed_columns'] > 0:
+                    changes_text.append(f"{changes['renamed_columns']} columns renamed")
+                st.info(", ".join(changes_text))
             else:
                 st.caption("No changes yet")
+    
+    def render_column_rename_section(self):
+        """Render column renaming interface"""
+        if not st.session_state.get(f"{self.key}_show_rename"):
+            return
+        
+        st.markdown("---")
+        st.markdown("### Rename Columns")
+        
+        with st.expander("Column Names Editor", expanded=True):
+            st.caption("Change column names below. Press Enter to save each change.")
+            
+            # Display current column names with rename fields
+            for i, col in enumerate(self.df.columns):
+                col1, col2, col3 = st.columns([2, 4, 1])
+                
+                with col1:
+                    st.text(f"Column {i+1}:")
+                
+                with col2:
+                    new_name = st.text_input(
+                        "New name:",
+                        value=col,
+                        key=f"{self.key}_rename_{col}",
+                        label_visibility="collapsed"
+                    )
+                
+                with col3:
+                    if new_name and new_name != col:
+                        if st.button("Apply", key=f"{self.key}_apply_{col}"):
+                            if self.rename_column(col, new_name):
+                                st.success(f"Renamed '{col}' to '{new_name}'")
+                                st.rerun()
+                            else:
+                                st.error(f"Cannot rename to '{new_name}' - name already exists")
+            
+            # Add new column option
+            st.markdown("---")
+            st.markdown("**Add New Column**")
+            
+            col_a, col_b = st.columns([3, 1])
+            with col_a:
+                new_col_name = st.text_input(
+                    "New column name:",
+                    placeholder="Enter new column name",
+                    key=f"{self.key}_new_col"
+                )
+            
+            with col_b:
+                if st.button("Add Column", key=f"{self.key}_add_col"):
+                    if new_col_name and new_col_name not in self.df.columns:
+                        self.add_column(new_col_name)
+                        st.success(f"Added column '{new_col_name}'")
+                        st.rerun()
+                    elif new_col_name in self.df.columns:
+                        st.error(f"Column '{new_col_name}' already exists")
+            
+            # Delete column option
+            st.markdown("**Delete Column**")
+            col_to_delete = st.selectbox(
+                "Select column to delete:",
+                [""] + list(self.df.columns),
+                key=f"{self.key}_delete_select"
+            )
+            
+            if col_to_delete:
+                if st.button("Delete Column", type="secondary", key=f"{self.key}_delete_btn"):
+                    if self.delete_column(col_to_delete):
+                        st.success(f"Deleted column '{col_to_delete}'")
+                        st.rerun()
+        
+        st.markdown("---")
     
     def render_search_box(self):
         """Render search functionality"""
@@ -274,6 +361,51 @@ class InteractiveTable:
         self.save_state()
         st.rerun()
     
+    def add_column(self, col_name):
+        """Add new column"""
+        if col_name and col_name not in self.df.columns:
+            self.df[col_name] = None
+            self.renamed_columns[col_name] = f"Added: {col_name}"
+            self.save_state()
+            return True
+        return False
+    
+    def rename_column(self, old_name, new_name):
+        """Rename column"""
+        if new_name and new_name != old_name and new_name not in self.df.columns:
+            # Track the rename in our dictionary
+            if old_name not in self.renamed_columns:
+                self.renamed_columns[old_name] = new_name
+            else:
+                # Update the rename chain
+                original_name = list(self.renamed_columns.keys())[list(self.renamed_columns.values()).index(old_name)] if old_name in self.renamed_columns.values() else old_name
+                self.renamed_columns[original_name] = new_name
+            
+            # Actually rename the column
+            self.df = self.df.rename(columns={old_name: new_name})
+            self.save_state()
+            return True
+        return False
+    
+    def delete_column(self, col_name):
+        """Delete column"""
+        if col_name in self.df.columns:
+            # Remove from renamed columns tracking if present
+            if col_name in self.renamed_columns:
+                del self.renamed_columns[col_name]
+            elif col_name in self.renamed_columns.values():
+                # Find the key that maps to this column
+                for key, value in list(self.renamed_columns.items()):
+                    if value == col_name:
+                        del self.renamed_columns[key]
+                        break
+            
+            # Actually delete the column
+            self.df = self.df.drop(columns=[col_name])
+            self.save_state()
+            return True
+        return False
+    
     def edit_cell(self, row_idx, col_name, new_value):
         """Edit single cell"""
         old_value = self.df.at[row_idx, col_name]
@@ -295,6 +427,9 @@ class InteractiveTable:
         """Render the interactive table"""
         # Render toolbar
         self.render_toolbar()
+        
+        # Render column rename section if active
+        self.render_column_rename_section()
         
         # Render search box
         search_matches = self.render_search_box()
@@ -357,6 +492,7 @@ class InteractiveTable:
             
             # Update session state
             st.session_state[f'{self.key}_modified_cells'] = self.modified_cells
+            st.session_state[f'{self.key}_renamed_columns'] = self.renamed_columns
             
             return self.df
             

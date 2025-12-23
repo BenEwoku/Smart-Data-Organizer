@@ -2515,7 +2515,7 @@ with tab3:
             # Import your custom InteractiveTable
             from utils.interactive_table import InteractiveTable
             
-            st.info("**Interactive mode enabled!** Click any cell to edit. Changes save automatically.")
+            st.info("Interactive mode enabled! Click any cell to edit. Changes save automatically.")
             
             # Check for reserved column names before creating InteractiveTable
             df_for_edit = df_organized.copy()
@@ -2551,6 +2551,11 @@ with tab3:
                 - Ctrl+Z: Undo
                 - Ctrl+Y: Redo
                 - Ctrl+A: Select all
+                
+                **Column Operations:**
+                - Click "Rename Columns" button to edit column names
+                - Add new columns from the rename interface
+                - Delete columns from the rename interface
                 """)
             
             # Render the interactive table
@@ -2561,8 +2566,13 @@ with tab3:
             
             # Show changes summary
             changes = interactive_table.get_changes_summary()
-            if changes:
-                st.success(f"**{changes['modified_cells']} cells modified** in {changes['modified_rows']} rows")
+            if changes['modified_cells'] > 0 or changes['renamed_columns'] > 0:
+                change_msgs = []
+                if changes['modified_cells'] > 0:
+                    change_msgs.append(f"{changes['modified_cells']} cells modified")
+                if changes['renamed_columns'] > 0:
+                    change_msgs.append(f"{changes['renamed_columns']} columns renamed")
+                st.success(" | ".join(change_msgs))
             
         except ImportError as e:
             st.error("Interactive table feature not available.")
@@ -2590,6 +2600,39 @@ with tab3:
                 """)
             
             # Fallback to regular display
+            st.dataframe(df_organized, use_container_width=True, height=400)
+    else:
+        # VIEW MODE - Regular display
+        if structure == "Email Data" and 'Spam_Score' in df_organized.columns:
+            # Create a styled dataframe that highlights spam
+            display_df = df_organized.copy()
+            
+            # Add color coding for spam
+            def highlight_spam(row):
+                if row['Spam_Score'] >= 70:
+                    return ['background-color: #ffcccc'] * len(row)
+                elif row['Spam_Score'] >= 50:
+                    return ['background-color: #fff3cd'] * len(row)
+                else:
+                    return [''] * len(row)
+            
+            # Show styled dataframe
+            st.dataframe(
+                display_df.style.apply(highlight_spam, axis=1),
+                use_container_width=True,
+                height=400
+            )
+            
+            # Legend for spam highlighting
+            col_legend1, col_legend2, col_legend3 = st.columns(3)
+            with col_legend1:
+                st.markdown('<div style="background-color: #ffcccc; padding: 5px; border-radius: 3px;">Likely spam (≥70)</div>', unsafe_allow_html=True)
+            with col_legend2:
+                st.markdown('<div style="background-color: #fff3cd; padding: 5px; border-radius: 3px;">Suspicious (50-69)</div>', unsafe_allow_html=True)
+            with col_legend3:
+                st.markdown('<div style="background-color: #d4edda; padding: 5px; border-radius: 3px;">Clean (<50)</div>', unsafe_allow_html=True)
+        else:
+            # Regular dataframe display for non-email data
             st.dataframe(df_organized, use_container_width=True, height=400)
     # ========== END DISPLAY MODE ==========
 

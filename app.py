@@ -1044,6 +1044,8 @@ with tab1:
                 
                 # ========== NEW: SHEET SELECTION FOR EXCEL FILES ==========
                 sheet_name = None
+                load_selected_sheet = False  # NEW: Control variable
+
                 if file_ext in ['xlsx', 'xls']:
                     try:
                         # Get sheet names from Excel file
@@ -1060,7 +1062,8 @@ with tab1:
                             selected_sheet = st.selectbox(
                                 "Choose worksheet to load:",
                                 sheet_options,
-                                help="Select which worksheet contains the data you want to organize"
+                                help="Select which worksheet contains the data you want to organize",
+                                key=f"sheet_select_{file_id}"  # NEW: Unique key
                             )
                             
                             if selected_sheet != "Select a worksheet...":
@@ -1074,6 +1077,15 @@ with tab1:
                                         st.caption(f"Preview: 5 rows from '{sheet_name}' worksheet")
                                     except:
                                         st.info("Could not preview this worksheet")
+                                
+                                # NEW: ADD A BUTTON TO LOAD THE SELECTED SHEET
+                                col1, col2, col3 = st.columns([2, 1, 2])
+                                with col2:
+                                    load_selected_sheet = st.button(
+                                        f"Load '{sheet_name}'",
+                                        type="primary",
+                                        use_container_width=True
+                                    )
                             else:
                                 st.warning("Please select a worksheet to continue")
                                 sheet_name = None
@@ -1083,6 +1095,16 @@ with tab1:
                             
                     except Exception as e:
                         st.error(f"Could not read Excel file sheets: {str(e)}")
+
+                # ========== MODIFIED: CHECK IF WE SHOULD LOAD DATA ==========
+                # Only load data if:
+                # 1. This is the first time loading the file, OR
+                # 2. User clicked "Load Selected Sheet" button
+
+                should_process = (
+                    st.session_state.last_uploaded_file != file_id or  # First time
+                    load_selected_sheet  # User clicked load button
+                )
                 
                 # ========== NEW: SHEET SELECTION FOR CSV FILES ==========
                 elif file_ext == 'csv':

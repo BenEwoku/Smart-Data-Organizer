@@ -1020,7 +1020,6 @@ with tab1:
             else:
                 st.warning("Please paste some data first")
 
-    
     elif input_method == "Upload File":
         st.markdown("**Upload your data file**")
         st.caption("Supported formats: CSV, Excel (.xlsx, .xls), TXT, PDF, DOCX")
@@ -1096,16 +1095,6 @@ with tab1:
                     except Exception as e:
                         st.error(f"Could not read Excel file sheets: {str(e)}")
 
-                # ========== MODIFIED: CHECK IF WE SHOULD LOAD DATA ==========
-                # Only load data if:
-                # 1. This is the first time loading the file, OR
-                # 2. User clicked "Load Selected Sheet" button
-
-                should_process = (
-                    st.session_state.last_uploaded_file != file_id or  # First time
-                    load_selected_sheet  # User clicked load button
-                )
-                
                 # ========== NEW: SHEET SELECTION FOR CSV FILES ==========
                 if file_ext == 'csv':
                     # For CSV, check if it might have multiple sheets/tables
@@ -1197,86 +1186,104 @@ with tab1:
                     except Exception as e:
                         # If multi-table detection fails, just proceed normally
                         pass
+                
+                # ========== MODIFIED: CHECK IF WE SHOULD LOAD DATA ==========
+                # Only load data if:
+                # 1. This is the first time loading the file, OR
+                # 2. User clicked "Load Selected Sheet" button
+                should_process = (
+                    st.session_state.last_uploaded_file != file_id or  # First time
+                    load_selected_sheet  # User clicked load button
+                )
+                
                 # ========== END SHEET SELECTION ==========
-
-                with st.spinner(f"Reading {file_ext.upper()} file..."):
-                    try:
-                        # Import the file parser
-                        from utils.file_parser import parse_uploaded_file
-                        
-                        # ========== CRITICAL FIX: RESET FILE POINTER ==========
-                        uploaded_file.seek(0)  # RESET TO BEGINNING BEFORE PARSING
-                        # ========== END FIX ==========
-                        
-                        # Pass sheet_name to the parser if it's an Excel file
-                        df_raw = parse_uploaded_file(uploaded_file, sheet_name=sheet_name)
-                        
-                        if df_raw is not None and len(df_raw) > 0:
-                            # Clean column names before storing
-                            import pandas as pd
+                
+                # Only process the file if should_process is True
+                if should_process:
+                    with st.spinner(f"Reading {file_ext.upper()} file..."):
+                        try:
+                            # Import the file parser
+                            from utils.file_parser import parse_uploaded_file
                             
-                            # Fill NaN column names
-                            df_raw.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df_raw.columns)]
+                            # ========== CRITICAL FIX: RESET FILE POINTER ==========
+                            uploaded_file.seek(0)  # RESET TO BEGINNING BEFORE PARSING
+                            # ========== END FIX ==========
                             
-                            # Handle duplicate column names
-                            cols = pd.Series(df_raw.columns)
-                            for dup in cols[cols.duplicated()].unique():
-                                cols[cols == dup] = [f'{dup}_{i}' if i != 0 else dup for i in range(sum(cols == dup))]
+                            # Pass sheet_name to the parser if it's an Excel file
+                            df_raw = parse_uploaded_file(uploaded_file, sheet_name=sheet_name)
                             
-                            df_raw.columns = cols
-                            
-                            st.session_state.df = df_raw
-                            st.session_state.last_uploaded_file = file_id
-                            st.session_state.file_processed = True
-                            
-                            # Increment conversion count
-                            increment_conversion_count(st.session_state.user_email)
-                            
-                            # Show preview
-                            with st.expander("Data Preview", expanded=True):
-                                # Clean column names for display
-                                df_display = df_raw.copy()
+                            if df_raw is not None and len(df_raw) > 0:
+                                # Clean column names before storing
+                                import pandas as pd
                                 
-                                # 1. Fill NaN column names (already done but keep for safety)
-                                df_display.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df_display.columns)]
+                                # Fill NaN column names
+                                df_raw.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df_raw.columns)]
                                 
-                                # 2. Handle duplicate column names (already done but keep for safety)
-                                cols_display = pd.Series(df_display.columns)
-                                for dup in cols_display[cols_display.duplicated()].unique():
-                                    cols_display[cols_display == dup] = [f'{dup}_{i}' if i != 0 else dup for i in range(sum(cols_display == dup))]
+                                # Handle duplicate column names
+                                cols = pd.Series(df_raw.columns)
+                                for dup in cols[cols.duplicated()].unique():
+                                    cols[cols == dup] = [f'{dup}_{i}' if i != 0 else dup for i in range(sum(cols == dup))]
                                 
-                                df_display.columns = cols_display
+                                df_raw.columns = cols
                                 
-                                st.dataframe(df_display.head(10), use_container_width=True)
-                                st.caption(f"**Total:** {len(df_raw):,} rows × {len(df_raw.columns)} columns")
+                                st.session_state.df = df_raw
+                                st.session_state.last_uploaded_file = file_id
+                                st.session_state.file_processed = True
                                 
-                                # Show warning if there were issues
-                                original_cols = df_raw.columns.tolist()
-                                if any(pd.isna(col) for col in original_cols) or len(original_cols) != len(set(original_cols)):
-                                    st.warning("Found duplicate or empty column names. These have been renamed for display.")
+                                # Increment conversion count
+                                increment_conversion_count(st.session_state.user_email)
+                                
+                                # Show preview
+                                with st.expander("Data Preview", expanded=True):
+                                    # Clean column names for display
+                                    df_display = df_raw.copy()
+                                    
+                                    # 1. Fill NaN column names (already done but keep for safety)
+                                    df_display.columns = [f'Column_{i}' if pd.isna(col) else str(col) for i, col in enumerate(df_display.columns)]
+                                    
+                                    # 2. Handle duplicate column names (already done but keep for safety)
+                                    cols_display = pd.Series(df_display.columns)
+                                    for dup in cols_display[cols_display.duplicated()].unique():
+                                        cols_display[cols_display == dup] = [f'{dup}_{i}' if i != 0 else dup for i in range(sum(cols_display == dup))]
+                                    
+                                    df_display.columns = cols_display
+                                    
+                                    st.dataframe(df_display.head(10), use_container_width=True)
+                                    st.caption(f"**Total:** {len(df_raw):,} rows × {len(df_raw.columns)} columns")
+                                    
+                                    # Show warning if there were issues
+                                    original_cols = df_raw.columns.tolist()
+                                    if any(pd.isna(col) for col in original_cols) or len(original_cols) != len(set(original_cols)):
+                                        st.warning("Found duplicate or empty column names. These have been renamed for display.")
+                                
+                                st.success(f"{file_ext.upper()} file processed successfully!")
+                                
+                                # Auto-advance hint
+                                st.info("Click on the Detect tab to continue")
+                                
+                            else:
+                                st.error(f"Could not extract data from {file_ext.upper()} file")
+                                st.info("""
+                                **Troubleshooting tips:**
+                                - For Excel: Try selecting a different worksheet
+                                - For PDFs: Ensure the document contains actual tables (not scanned images)
+                                - For Word docs: Data should be in table format
+                                - For Excel: Check if file is password-protected
+                                """)
+                                
+                        except Exception as e:
+                            st.error(f"Error reading file: {str(e)}")
                             
-                            st.success(f"{file_ext.upper()} file processed successfully!")
-                            
-                            # Auto-advance hint
-                            st.info("Click on the Detect tab to continue")
-                            
-                        else:
-                            st.error(f"Could not extract data from {file_ext.upper()} file")
-                            st.info("""
-                            **Troubleshooting tips:**
-                            - For Excel: Try selecting a different worksheet
-                            - For PDFs: Ensure the document contains actual tables (not scanned images)
-                            - For Word docs: Data should be in table format
-                            - For Excel: Check if file is password-protected
-                            """)
-                            
-                    except Exception as e:
-                        st.error(f"Error reading file: {str(e)}")
-                        
-                        # Show detailed error for debugging
-                        with st.expander("Technical Details"):
-                            st.code(str(e))
-                            st.caption("If this error persists, try saving your data in CSV format.")
+                            # Show detailed error for debugging
+                            with st.expander("Technical Details"):
+                                st.code(str(e))
+                                st.caption("If this error persists, try saving your data in CSV format.")
+                else:
+                    # File is new but user hasn't clicked "Load" button yet
+                    if file_ext in ['xlsx', 'xls'] and sheet_name:
+                        st.info(f"**Ready to load**: Worksheet '{sheet_name}' selected. Click the 'Load' button above to process this sheet.")
+                    elif file_ext in ['xlsx', 'xls']:
+                        st.info("**Action needed**: Please select a worksheet from the dropdown above.")
             
             else:
                 # File already processed - just show preview

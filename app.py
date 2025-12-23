@@ -856,7 +856,7 @@ st.markdown("---")
 # Check if user can perform conversions
 if not can_convert(user):
     st.error("""
-    ⚠️ **Conversion Limit Reached**
+    **Conversion Limit Reached**
     
     You've used all your free conversions this month.
     
@@ -1042,12 +1042,148 @@ with tab1:
                 
                 st.info(f"Uploaded: {uploaded_file.name} ({file_ext.upper()}, {uploaded_file.size / 1024:.1f} KB)")
                 
+                # ========== NEW: SHEET SELECTION FOR EXCEL FILES ==========
+                sheet_name = None
+                if file_ext in ['xlsx', 'xls']:
+                    try:
+                        # Get sheet names from Excel file
+                        import pandas as pd
+                        xl = pd.ExcelFile(uploaded_file)
+                        sheet_names = xl.sheet_names
+                        
+                        if len(sheet_names) > 1:
+                            st.markdown("### Select Worksheet")
+                            st.caption(f"This Excel file contains {len(sheet_names)} worksheets")
+                            
+                            # Display sheet names with preview
+                            sheet_options = ["Select a worksheet..."] + sheet_names
+                            selected_sheet = st.selectbox(
+                                "Choose worksheet to load:",
+                                sheet_options,
+                                help="Select which worksheet contains the data you want to organize"
+                            )
+                            
+                            if selected_sheet != "Select a worksheet...":
+                                sheet_name = selected_sheet
+                                
+                                # Show sheet preview
+                                with st.expander(f"Preview: {sheet_name}", expanded=False):
+                                    try:
+                                        preview_df = xl.parse(sheet_name, nrows=10)
+                                        st.dataframe(preview_df.head(5), use_container_width=True)
+                                        st.caption(f"Preview: 5 rows from '{sheet_name}' worksheet")
+                                    except:
+                                        st.info("Could not preview this worksheet")
+                            else:
+                                st.warning("Please select a worksheet to continue")
+                                sheet_name = None
+                        else:
+                            sheet_name = sheet_names[0] if sheet_names else None
+                            st.info(f"Single worksheet found: '{sheet_name}'")
+                            
+                    except Exception as e:
+                        st.error(f"Could not read Excel file sheets: {str(e)}")
+                
+                # ========== NEW: SHEET SELECTION FOR CSV FILES ==========
+                elif file_ext == 'csv':
+                    # For CSV, check if it might have multiple sheets/tables
+                    try:
+                        # Read the entire CSV to check for multiple tables
+                        uploaded_file.seek(0)  # Reset file pointer
+                        content = uploaded_file.read().decode('utf-8', errors='ignore')
+                        
+                        # Check for multiple empty lines that might separate tables
+                        lines = content.split('\n')
+                        empty_line_counts = []
+                        empty_count = 0
+                        
+                        for i, line in enumerate(lines):
+                            if line.strip() == '':
+                                empty_count += 1
+                            else:
+                                if empty_count > 2:  # More than 2 empty lines might indicate table separation
+                                    empty_line_counts.append((i, empty_count))
+                                empty_count = 0
+                        
+                        if empty_line_counts:
+                            st.markdown("### Multiple Data Tables Detected")
+                            st.caption("This CSV appears to contain multiple data tables separated by empty lines")
+                            
+                            # Let user choose which table to load
+                            table_options = ["Select a table..."]
+                            table_previews = {}
+                            
+                            # Parse tables
+                            start_idx = 0
+                            table_num = 1
+                            
+                            for empty_idx, empty_count in empty_line_counts:
+                                # Extract table between start_idx and empty_idx
+                                table_lines = lines[start_idx:empty_idx]
+                                if table_lines and any(line.strip() for line in table_lines):
+                                    table_name = f"Table {table_num} (lines {start_idx+1}-{empty_idx})"
+                                    table_options.append(table_name)
+                                    
+                                    # Try to parse as DataFrame for preview
+                                    try:
+                                        table_content = '\n'.join(table_lines)
+                                        table_df = pd.read_csv(pd.io.common.StringIO(table_content))
+                                        table_previews[table_name] = table_df.head(5)
+                                    except:
+                                        table_previews[table_name] = None
+                                    
+                                    table_num += 1
+                                
+                                start_idx = empty_idx + empty_count
+                            
+                            # Add last table
+                            if start_idx < len(lines):
+                                table_lines = lines[start_idx:]
+                                if table_lines and any(line.strip() for line in table_lines):
+                                    table_name = f"Table {table_num} (lines {start_idx+1}-{len(lines)})"
+                                    table_options.append(table_name)
+                                    
+                                    try:
+                                        table_content = '\n'.join(table_lines)
+                                        table_df = pd.read_csv(pd.io.common.StringIO(table_content))
+                                        table_previews[table_name] = table_df.head(5)
+                                    except:
+                                        table_previews[table_name] = None
+                            
+                            if len(table_options) > 1:
+                                selected_table = st.selectbox(
+                                    "Choose data table to load:",
+                                    table_options,
+                                    help="Select which data table you want to organize"
+                                )
+                                
+                                if selected_table != "Select a table...":
+                                    # Show preview of selected table
+                                    if selected_table in table_previews and table_previews[selected_table] is not None:
+                                        with st.expander(f"Preview: {selected_table}", expanded=False):
+                                            st.dataframe(table_previews[selected_table], use_container_width=True)
+                                            st.caption(f"Preview of selected table")
+                                    
+                                    # Parse the selected table
+                                    table_idx = table_options.index(selected_table) - 1
+                                    # We'll handle the actual parsing in the main processing section
+                                    sheet_name = f"csv_table_{table_idx}"
+                                else:
+                                    st.warning("Please select a table to continue")
+                                    sheet_name = None
+                        
+                    except Exception as e:
+                        # If multi-table detection fails, just proceed normally
+                        pass
+                # ========== END SHEET SELECTION ==========
+                
                 with st.spinner(f"Reading {file_ext.upper()} file..."):
                     try:
                         # Import the file parser
                         from utils.file_parser import parse_uploaded_file
                         
-                        df_raw = parse_uploaded_file(uploaded_file)
+                        # Pass sheet_name to the parser if it's an Excel file
+                        df_raw = parse_uploaded_file(uploaded_file, sheet_name=sheet_name)
                         
                         if df_raw is not None and len(df_raw) > 0:
                             # Clean column names before storing
@@ -1102,6 +1238,7 @@ with tab1:
                             st.error(f"Could not extract data from {file_ext.upper()} file")
                             st.info("""
                             **Troubleshooting tips:**
+                            - For Excel: Try selecting a different worksheet
                             - For PDFs: Ensure the document contains actual tables (not scanned images)
                             - For Word docs: Data should be in table format
                             - For Excel: Check if file is password-protected

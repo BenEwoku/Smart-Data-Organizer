@@ -8,12 +8,13 @@ import streamlit as st
 from io import BytesIO
 import re
 
-def parse_uploaded_file(uploaded_file):
+def parse_uploaded_file(uploaded_file, sheet_name=None):
     """
     Parse uploaded file based on type
     
     Args:
         uploaded_file: Streamlit UploadedFile object
+        sheet_name: Optional sheet name for Excel files
         
     Returns:
         pd.DataFrame (ALWAYS returns DataFrame, never None)
@@ -33,7 +34,7 @@ def parse_uploaded_file(uploaded_file):
         elif file_ext == 'txt':
             df = parse_txt(uploaded_file)
         elif file_ext in ['xlsx', 'xls']:
-            df = parse_excel(uploaded_file)
+            df = parse_excel(uploaded_file, sheet_name)
         elif file_ext == 'pdf':
             df = parse_pdf(uploaded_file)
         elif file_ext in ['docx', 'doc']:
@@ -70,32 +71,84 @@ def parse_uploaded_file(uploaded_file):
             "Type": [file_ext]
         })
 
-def parse_csv(file):
+def parse_csv(file, section_name=None):
     """Parse CSV file - always returns DataFrame"""
     try:
-        df = pd.read_csv(file)
-        return df
+        if section_name:
+            # If section_name is provided, it means we've already extracted a specific section
+            # and 'file' is actually a BytesIO object with that section
+            try:
+                df = pd.read_csv(file)
+                return df
+            except Exception as e:
+                # Try different encodings for the section
+                try:
+                    file.seek(0)  # Reset file pointer
+                    df = pd.read_csv(file, encoding='latin-1')
+                    return df
+                except:
+                    st.error(f"CSV section parsing error: {str(e)}")
+                    return pd.DataFrame({"Error": [f"CSV section parsing failed: {str(e)[:100]}"]})
+        else:
+            # Normal CSV parsing
+            try:
+                df = pd.read_csv(file)
+                return df
+            except Exception as e:
+                # Try different encodings
+                try:
+                    file.seek(0)  # Reset file pointer
+                    df = pd.read_csv(file, encoding='latin-1')
+                    return df
+                except:
+                    st.error(f"CSV parsing error: {str(e)}")
+                    # Return empty DataFrame instead of None
+                    return pd.DataFrame({"Error": [f"CSV parsing failed: {str(e)[:100]}"]})
     except Exception as e:
-        # Try different encodings
-        try:
-            df = pd.read_csv(file, encoding='latin-1')
-            return df
-        except:
-            st.error(f"CSV parsing error: {str(e)}")
-            # Return empty DataFrame instead of None
-            return pd.DataFrame({"Error": [f"CSV parsing failed: {str(e)[:100]}"]})
+        st.error(f"CSV parsing error: {str(e)}")
+        return pd.DataFrame({"Error": [f"CSV parsing failed: {str(e)[:100]}"]})
 
-def parse_excel(file):
+def parse_excel(file, sheet_name=None):
     """Parse Excel file - always returns DataFrame"""
     try:
-        # Try openpyxl first (for .xlsx)
-        try:
-            df = pd.read_excel(file, engine='openpyxl')
-            return df
-        except:
-            # Fall back to xlrd (for .xls)
-            df = pd.read_excel(file, engine='xlrd')
-            return df
+        if sheet_name:
+            # Try to read specific sheet with openpyxl first
+            try:
+                df = pd.read_excel(file, sheet_name=sheet_name, engine='openpyxl')
+                return df
+            except Exception as e1:
+                # Fall back to xlrd for .xls files
+                try:
+                    file.seek(0)  # Reset file pointer
+                    df = pd.read_excel(file, sheet_name=sheet_name, engine='xlrd')
+                    return df
+                except Exception as e2:
+                    st.warning(f"Cannot read sheet '{sheet_name}' with openpyxl or xlrd")
+                    # Try reading without specifying engine
+                    try:
+                        file.seek(0)
+                        df = pd.read_excel(file, sheet_name=sheet_name)
+                        return df
+                    except:
+                        st.error(f"Excel sheet '{sheet_name}' parsing error: {e1}; {e2}")
+                        return pd.DataFrame({"Error": [f"Cannot read sheet '{sheet_name}': {str(e1)[:100]}"]})
+        else:
+            # No sheet specified, try to read first sheet
+            try:
+                # Try openpyxl first (for .xlsx)
+                try:
+                    df = pd.read_excel(file, engine='openpyxl')
+                    return df
+                except:
+                    # Fall back to xlrd (for .xls)
+                    file.seek(0)  # Reset file pointer
+                    df = pd.read_excel(file, engine='xlrd')
+                    return df
+            except Exception as e:
+                st.error(f"Excel parsing error: {str(e)}")
+                # Return empty DataFrame instead of None
+                return pd.DataFrame({"Error": [f"Excel parsing failed: {str(e)[:100]}"]})
+                
     except Exception as e:
         st.error(f"Excel parsing error: {str(e)}")
         # Return empty DataFrame instead of None

@@ -2517,7 +2517,8 @@ with tab3:
             
             st.info("Interactive mode enabled! Click any cell to edit. Changes save automatically.")
             
-            # Create instance of your InteractiveTable with cleaned DataFrame
+            # Create instance of your InteractiveTable
+            # It will handle its own session state initialization
             interactive_table = InteractiveTable(df_organized, key="organize_table")
             
             # Display keyboard shortcuts
@@ -2577,18 +2578,11 @@ with tab3:
                 st.code(str(e))
                 st.markdown("**Common issues:**")
                 st.markdown("""
-                1. **Data type issues**: Some columns may have mixed data types
-                2. **Special characters**: Column names or data may contain special characters
-                3. **Memory issues**: Very large datasets may cause problems
-                4. **Column name conflicts**: Duplicate or reserved column names
+                1. **Session state issues**: Try refreshing the page
+                2. **Data type issues**: Some columns may have mixed data types
+                3. **Special characters**: Column names or data may contain special characters
+                4. **Memory issues**: Very large datasets may cause problems
                 """)
-                
-                # Try to identify the specific issue
-                st.markdown("**Debugging info:**")
-                if 'df_organized' in locals():
-                    st.write(f"- DataFrame shape: {df_organized.shape}")
-                    st.write(f"- Column names: {list(df_organized.columns)}")
-                    st.write(f"- Column dtypes: {df_organized.dtypes.to_dict()}")
             
             # Fallback to regular display
             st.dataframe(df_organized, use_container_width=True, height=400)

@@ -27,19 +27,44 @@ class InteractiveTable:
         self.original_df = self.df.copy()
         self.key = key
         
-        # Initialize session state for this table
-        if f'{key}_history' not in st.session_state:
-            st.session_state[f'{key}_history'] = []
-            st.session_state[f'{key}_history_index'] = -1
-            st.session_state[f'{key}_original'] = self.df.copy()
-            st.session_state[f'{key}_modified_cells'] = set()
-            st.session_state[f'{key}_renamed_columns'] = {}
+        # Initialize session state for this table - WITH PROPER DEFAULT VALUES
+        self._initialize_session_state()
         
+        # Now safely access session state
         self.history = st.session_state[f'{key}_history']
         self.history_index = st.session_state[f'{key}_history_index']
         self.original_df_session = st.session_state[f'{key}_original']
         self.modified_cells = st.session_state[f'{key}_modified_cells']
         self.renamed_columns = st.session_state[f'{key}_renamed_columns']
+    
+    def _initialize_session_state(self):
+        """Initialize all session state keys with proper defaults"""
+        key = self.key
+        
+        # Initialize each key individually
+        if f'{key}_history' not in st.session_state:
+            st.session_state[f'{key}_history'] = []
+        
+        if f'{key}_history_index' not in st.session_state:
+            st.session_state[f'{key}_history_index'] = -1
+        
+        if f'{key}_original' not in st.session_state:
+            st.session_state[f'{key}_original'] = self.df.copy()
+        
+        if f'{key}_modified_cells' not in st.session_state:
+            st.session_state[f'{key}_modified_cells'] = set()
+        
+        if f'{key}_renamed_columns' not in st.session_state:
+            st.session_state[f'{key}_renamed_columns'] = {}
+        
+        if f'{key}_show_rename' not in st.session_state:
+            st.session_state[f'{key}_show_rename'] = False
+        
+        if f'{key}_show_search' not in st.session_state:
+            st.session_state[f'{key}_show_search'] = False
+        
+        if f'{key}_confirm_revert' not in st.session_state:
+            st.session_state[f'{key}_confirm_revert'] = False
     
     def _clean_dataframe(self, df):
         """Clean dataframe to avoid issues"""
@@ -118,6 +143,8 @@ class InteractiveTable:
         # Update session state
         st.session_state[f'{self.key}_history'] = self.history
         st.session_state[f'{self.key}_history_index'] = self.history_index
+        st.session_state[f'{self.key}_modified_cells'] = self.modified_cells
+        st.session_state[f'{self.key}_renamed_columns'] = self.renamed_columns
     
     def undo(self):
         """Undo last change"""
@@ -128,7 +155,11 @@ class InteractiveTable:
             self.modified_cells = state['modified_cells'].copy()
             self.renamed_columns = state['renamed_columns'].copy()
             
+            # Update session state
             st.session_state[f'{self.key}_history_index'] = self.history_index
+            st.session_state[f'{self.key}_modified_cells'] = self.modified_cells
+            st.session_state[f'{self.key}_renamed_columns'] = self.renamed_columns
+            
             return True
         return False
     
@@ -141,7 +172,11 @@ class InteractiveTable:
             self.modified_cells = state['modified_cells'].copy()
             self.renamed_columns = state['renamed_columns'].copy()
             
+            # Update session state
             st.session_state[f'{self.key}_history_index'] = self.history_index
+            st.session_state[f'{self.key}_modified_cells'] = self.modified_cells
+            st.session_state[f'{self.key}_renamed_columns'] = self.renamed_columns
+            
             return True
         return False
     
@@ -153,6 +188,10 @@ class InteractiveTable:
         self.history = []
         self.history_index = -1
         
+        # Clear confirmation state
+        st.session_state[f'{self.key}_confirm_revert'] = False
+        
+        # Update all session state keys
         st.session_state[f'{self.key}_history'] = []
         st.session_state[f'{self.key}_history_index'] = -1
         st.session_state[f'{self.key}_modified_cells'] = set()
@@ -191,9 +230,10 @@ class InteractiveTable:
                     st.rerun()
         
         with col3:
+            confirm_revert = st.session_state.get(f"{self.key}_confirm_revert", False)
             if st.button("Reset All", key=f"{self.key}_revert",
                         help="Discard all changes and revert to original"):
-                if st.session_state.get(f"{self.key}_confirm_revert"):
+                if confirm_revert:
                     self.revert_all()
                     st.success("All changes discarded")
                     st.session_state[f"{self.key}_confirm_revert"] = False
@@ -208,9 +248,10 @@ class InteractiveTable:
                 self.add_row()
         
         with col5:
+            show_rename = st.session_state.get(f"{self.key}_show_rename", False)
             if st.button("Rename Columns", key=f"{self.key}_rename_cols",
                         help="Rename table columns"):
-                st.session_state[f"{self.key}_show_rename"] = not st.session_state.get(f"{self.key}_show_rename", False)
+                st.session_state[f"{self.key}_show_rename"] = not show_rename
                 st.rerun()
         
         with col6:
@@ -227,7 +268,8 @@ class InteractiveTable:
     
     def render_column_rename_section(self):
         """Render column renaming interface"""
-        if not st.session_state.get(f"{self.key}_show_rename"):
+        show_rename = st.session_state.get(f"{self.key}_show_rename", False)
+        if not show_rename:
             return
         
         st.markdown("---")
@@ -299,7 +341,8 @@ class InteractiveTable:
     
     def render_search_box(self):
         """Render search functionality"""
-        if not st.session_state.get(f"{self.key}_show_search"):
+        show_search = st.session_state.get(f"{self.key}_show_search", False)
+        if not show_search:
             return None
         
         with st.expander("Search Table", expanded=True):

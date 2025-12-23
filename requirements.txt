@@ -1,5 +1,6 @@
 # Core framework
 streamlit>=1.28.0
+streamlit-aggrid
 
 # Data manipulation
 pandas>=2.0.0
